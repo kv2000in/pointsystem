@@ -1037,71 +1037,53 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
     Dim PostCallNegativeMinutes As Integer
 
     Set mydb = CurrentDb()
-  '  mydb.Execute "CREATE TABLE NewHoursWorked " _
-            & "(ANES_PROV_ID CHAR, " _
-            & "ASSIGNMENTNAME CHAR, " _
-            & "QGENDA_DATE DATETIME, " _
-            & "HOURS_WORKED NUMBER, " _
-            & "ANES_DAY_START DATETIME, " _
-            & "ANES_DAY_END DATETIME, " _
-            & "POSITIVEMINUTES NUMBER, " _
-            & "EARLYRELIEFNEGATIVEMINUTES NUMBER, " _
-            & "LATESTARTNEGATIVEMINUTES NUMBER, " _
-            & "POSTCALLNEGATIVEMINUTES NUMBER, " _
-            & "CONSTRAINT HoursWorked UNIQUE " _
-            & "(ANES_PROV_ID, QGENDA_DATE, HOURS_WORKED));"
 
-    ' Loop through each shift
+
+  
     Set rsShiftTimes = mydb.OpenRecordset("SELECT * FROM ShiftTimes")
     
+    ' Loop through each shift
     Do Until rsShiftTimes.EOF
-        'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments " & _
-                 "WHERE AssignmentName LIKE '*" & rsShiftTimes!AssignmentName & "*' " & _
-                 "AND Weekday(QgendaDate) = " & rsShiftTimes!DayofTheWeek
-                 
-                 
-        Dim AnesProvIDCondition As String
-If Not IsNull(Anes_Prov_ID) And Anes_Prov_ID <> "" Then
-    AnesProvIDCondition = "AND Anes_Prov_ID = " & Anes_Prov_ID & " "
-Else
-    AnesProvIDCondition = ""  ' Exclude condition if Anes_Prov_ID is empty
-End If
         
-        
-'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments " & _
-                 "WHERE AssignmentName LIKE '*" & rsShiftTimes!AssignmentName & "*' " & _
-                 "AND Weekday(QgendaDate) = " & rsShiftTimes!DayofTheWeek
+         Debug.Print "Processing " & rsShiftTimes!AssignmentName & " AND " & rsShiftTimes!DayName
 
-   strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
+         
+        
+        
+        
+
+        
+        strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
          "WHERE S_AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
          "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
-
-'      MsgBox (strSQL)
-       
- '      InputBox "Copy the value below:", "Copy Value", strSQL
-        
-        
         
         Set rsAnesData = mydb.OpenRecordset(strSQL)
-        
-        Do Until rsAnesData.EOF
-        
-        Anes_Prov_ID = Nz(rsAnesData!Anes_Prov_ID, 0) ' Default to 0 if Null
-QgendaDate = Nz(rsAnesData!QgendaDate, Date) ' Default to current date
-Anes_Start = Nz(rsAnesData!Anes_Start, #1/1/1900#) ' Default to some safe date
-Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#) ' Default to some safe date
-        
-        'Anes_Prov_ID = rsAnesData!Anes_Prov_ID
-         '   QgendaDate = rsAnesData!QgendaDate
-          '  Anes_Start = CDate(rsAnesData!Anes_Start)
-           ' Anes_End = CDate(rsAnesData!Anes_End)
+
+
+
+
             
-            ' Determine shift times
-            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!StartTime)
-            If rsShiftTimes!StopTime < rsShiftTimes!StartTime Then
-                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!StopTime)
+           
+
+
+
+
+       
+        ' Process each record in rsAnesData
+        If Not rsAnesData.EOF Then
+            
+            Do Until rsAnesData.EOF
+                Anes_Prov_ID = Nz(rsAnesData!Anes_Prov_ID, 0)
+                QgendaDate = Nz(rsAnesData!QgendaDate, Date)
+                Anes_Start = Nz(rsAnesData!Anes_Start, #1/1/1900#)
+                Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#)
+                
+                 ' Determine shift times
+            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStartTime)
+            If rsShiftTimes!AnalysisStopTime <= rsShiftTimes!AnalysisStartTime Then
+                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!AnalysisStopTime)
             Else
-                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!StopTime)
+                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStopTime)
             End If
 
 
@@ -1110,66 +1092,30 @@ Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#) ' Default to some safe date
 ShiftStart = Format(ShiftStart, "mm/dd/yyyy hh:nn:ss AMPM")
 ShiftEnd = Format(ShiftEnd, "mm/dd/yyyy hh:nn:ss AMPM")
 
-
-'rsAnesData.Filter = "(Anes_Prov_ID = " & Anes_Prov_ID & ") AND " & _
-                    "((Anes_Start >= #" & ShiftStart & "# AND Anes_Start <= #" & ShiftEnd & "#) OR " & _
-                    "(Anes_End >= #" & ShiftStart & "# AND Anes_End <= #" & ShiftEnd & "#))"
-
-'Set rsFiltered = rsAnesData.OpenRecordset()  ' This creates a new filtered recordset
+Debug.Print "Analysis Start " & ShiftStart
+Debug.Print "Analysis Stop " & ShiftEnd
 
 
-filterStr = "(Anes_Prov_ID = '" & Anes_Prov_ID & "') AND " & _
-                "((Anes_Start >= #" & ShiftStart & "# AND Anes_Start <= #" & ShiftEnd & "#) OR " & _
-                "(Anes_End >= #" & ShiftStart & "# AND Anes_End <= #" & ShiftEnd & "#))"
-
-
-rsAnesData.Filter = filterStr
-
-'InputBox "Copy the value below:", "Copy Value", filterStr
-
-
-On Error GoTo ErrorHandler
-' Open filtered recordset
-Set rsFiltered = rsAnesData.OpenRecordset()  ' Ensure rsAnesData is a DAO recordset
-
-
-
-                ' Accumulate minutes worked
-                TotalMinutesWorked = TotalMinutesWorked + DateDiff("n", Anes_Start, Anes_End)
-
-                ' Categorize positive/negative minutes
-                If Weekday(QgendaDate) = 1 Or Weekday(QgendaDate) = 7 Or _
-                   Not mydb.OpenRecordset("SELECT * FROM Holidays WHERE HolidayDate=#" & QgendaDate & "#").EOF Then
-                    PositiveMinutes = PositiveMinutes + DateDiff("n", Anes_Start, Anes_End)
-                Else
-                    If Hour(Anes_Start) >= 7 And Hour(Anes_End) <= 17 Then
-                        PositiveMinutes = PositiveMinutes + DateDiff("n", Anes_Start, Anes_End)
-                    ElseIf Anes_Start > (QgendaDate + #7:00:00 AM#) Then
-                        LateStartNegativeMinutes = DateDiff("n", QgendaDate + #7:00:00 AM#, Anes_Start)
-                    ElseIf Anes_End < (QgendaDate + #5:00:00 PM#) Then
-                        EarlyReliefNegativeMinutes = DateDiff("n", Anes_End, QgendaDate + #5:00:00 PM#)
-                    End If
-                End If
+              If (Anes_Start >= ShiftStart And Anes_Start <= ShiftEnd) Or _
+   (Anes_End >= ShiftStart And Anes_End <= ShiftEnd) Then
                 
-                ' Post Call Negative Minutes
-                If Anes_End > (QgendaDate + #11:00:00 PM#) Then
-                    If mydb.OpenRecordset("SELECT * FROM Holidays WHERE HolidayDate=#" & QgendaDate + 1 & "#").EOF Then
-                        If Weekday(QgendaDate + 1) <> 1 And Weekday(QgendaDate + 1) <> 7 Then
-                            PostCallNegativeMinutes = 600
-                        End If
-                    End If
+                            ' Process each record
+                            Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                            'ADD Aggregation by QgendaDate here
+                            
+                Else
+                Debug.Print "Skipped"
+                
                 End If
-
-            
-            rsAnesData.MoveNext
-        Loop
+                ' Move to next record in rsAnesData
+                rsAnesData.MoveNext
+            Loop
+        End If ' End If for rsAnesData.EOF check
+         Debug.Print "Finished Processing " & rsShiftTimes!AssignmentName & " AND " & rsShiftTimes!DayName
         
-        ' Store computed results
-        
-mydb.Execute "INSERT INTO NewHoursWorked (ASSIGNMENTNAME, ANES_PROV_ID, QGENDA_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END, POSITIVEMINUTES, EARLYRELIEFNEGATIVEMINUTES, LATESTARTNEGATIVEMINUTES, POSTCALLNEGATIVEMINUTES) " & _
-             "VALUES ('" & AssignmentName & "', '" & Anes_Prov_ID & "', #" & QgendaDate & "#, " & TotalMinutesWorked & ", #" & ShiftStart & "#, #" & ShiftEnd & "#, " & PositiveMinutes & ", " & EarlyReliefNegativeMinutes & ", " & LateStartNegativeMinutes & ", " & PostCallNegativeMinutes & ");"
-
+        ' Move to next shift
         rsShiftTimes.MoveNext
+      
     Loop
 
     ' Cleanup
@@ -1292,11 +1238,11 @@ Sub ExportShiftDataToExcel()
                 Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#)
                 
                  ' Determine shift times
-            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStartTime)
-            If rsShiftTimes!ShiftStopTime < rsShiftTimes!ShiftStartTime Then
-                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!ShiftStopTime)
+            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStartTime)
+            If rsShiftTimes!AnalysisStopTime <= rsShiftTimes!AnalysisStartTime Then
+                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!AnalysisStopTime)
             Else
-                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStopTime)
+                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStopTime)
             End If
 
 
