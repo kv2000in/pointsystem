@@ -1,0 +1,2071 @@
+Option Compare Database
+
+Sub AddMissingQgendaData(strName As String)
+ 
+Dim mydb As DAO.Database
+Dim myrst As DAO.Recordset
+
+
+Dim strSQL, strSQL1 As String
+
+On Error GoTo ErrorHandler
+ 
+   Set mydb = CurrentDb()
+    strSQL = "SELECT * FROM [DataQgenda-3-30-2022] WHERE Name= " & """" & strName & """" & ";"
+   Set myrst = mydb.OpenRecordset(strSQL)
+   
+ 
+ 
+   With myrst
+      Do Until .EOF
+           strSQL1 = "INSERT INTO [DataQgenda-4-21-2022] (Name,  [Date], AssignmentCode, AssignmentDetails) VALUES (" & """" & myrst!Name & """" & ", #" & myrst!Date & "#," & """" & myrst!AssignmentCode & """" & "," & """" & myrst!AssignmentDetails & """" & ");"
+            mydb.Execute (strSQL1)
+            
+        .MoveNext
+        Loop
+     End With
+     
+        
+   myrst.Close
+   
+    mydb.Close
+    
+    
+   Set myrst = Nothing
+   Set mydb = Nothing
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+
+Sub ChangeDateFieldfromShortTexttoDateTime()
+   On Error GoTo LargeUpdate_Error
+   Dim db As DAO.Database, ws As DAO.Workspace
+
+' Set MaxLocksPerFile. Gives - not enough memory /disk space error if tried directly from gui https://docs.microsoft.com/en-US/office/troubleshoot/access/error-when-perform-operation-on-table
+' The page locks required for the transaction exceed the MaxLocksPerFile value, which defaults to 9500 locks.
+' http://allenbrowne.com/ser-49.html
+' https://stackoverflow.com/questions/34030230/change-a-field-type-programatically-using-vba-access-2007
+
+   DBEngine.SetOption dbMaxLocksPerFile, 2000000
+
+Set db = CurrentDb
+   Set ws = Workspaces(0)
+
+' Perform the update.
+   ws.BeginTrans
+   db.Execute "ALTER TABLE [WorkingMaster] ALTER COLUMN [Date] DATETIME", _
+         dbFailOnError
+
+ws.CommitTrans
+
+db.Close
+   MsgBox "Done!"
+   Exit Sub
+
+LargeUpdate_Error:
+   MsgBox Err & " " & Error
+   ws.Rollback
+   MsgBox "Operation Failed - Update Canceled"
+   End Sub
+
+Sub CorrectName(IncorrectName As String, CorrectName As String)
+On Error GoTo ChangeName_Error
+Dim db As DAO.Database, ws As DAO.Workspace
+Dim mySQLString As String
+Dim myIncorrectName, myCorrectName As String
+myIncorrectName = IncorrectName
+myCorrectName = CorrectName
+
+
+mySQLString = "UPDATE WorkingMaster SET StaffName =" & """" & myCorrectName & """" & " WHERE StaffName = " & """" & myIncorrectName & """"
+
+Set db = CurrentDb
+   Set ws = Workspaces(0)
+   ws.BeginTrans
+   db.Execute (mySQLString)
+   
+ db.Close
+   MsgBox "Done!"
+   Exit Sub
+   
+ChangeName_Error:
+   MsgBox Err & " " & Error
+   ws.Rollback
+   MsgBox "Operation Failed - Update Canceled"
+End Sub
+Sub AddProviderIDstoQgendaTable(strTableName As String)
+Dim mySQLString0, mySQLString1 As String
+Dim db As DAO.Database
+Dim tdf As DAO.TableDef
+Dim fld As DAO.Field
+Dim mycolumnexists As Boolean
+mycolumnexists = False
+
+mySQLString0 = "SELECT * FROM EPIC_ProviderID_Names"
+'Check if ANES_PROV_ID column already exists in QGenda Table
+
+'mySQLString = "UPDATE WorkingMaster SET StaffSchedule = ""ResidentDaily"" WHERE (((WorkingMaster.StaffName) In (SELECT ResidentswithFalseCRNAAssignments.StaffName from ResidentswithFalseCRNAAssignments)));"
+
+
+
+On Error GoTo ChangeName_Error
+
+
+
+
+Set db = CurrentDb
+
+'Check if the new column already exists
+Set tdf = db.TableDefs(strTableName)
+For Each fld In tdf.Fields
+If fld.Name = "ANES_PROV_ID" Then
+mycolumnexists = True
+
+End If
+Next
+'If it doesn't exist - create a new column
+   If Not mycolumnexists Then
+   mySQLString1 = "ALTER TABLE [" & strTableName & "] ADD COLUMN ANES_PROV_ID TEXT (32);"
+   db.Execute (mySQLString1)
+   End If
+   
+   
+ db.Close
+   MsgBox "Done!"
+   Exit Sub
+   
+ChangeName_Error:
+   MsgBox Err & " " & Error
+MsgBox "Operation Failed - Update Canceled"
+
+End Sub
+
+Sub counthours(individual As String)
+
+Dim mydb As DAO.Database
+
+Dim strSQL, myindividual As String
+
+On Error GoTo ErrorHandler
+ myindividual = individual
+ 
+   Set mydb = CurrentDb()
+    strSQL = "SELECT [Anesthesia_staff-converted].PROV_NAME, [Anesthesia_staff-converted].AN_BEGIN_LOCAL_DTTM, [Anesthesia_staff-converted].AN_END_LOCAL_DTTM FROM [Anesthesia_staff-converted] WHERE [Anesthesia_staff-converted].PROV_NAME = myindividual And Not ([Anesthesia_staff-converted].AN_BEGIN_LOCAL_DTTM) Is Null ORDER BY DATEVALUE(AN_BEGIN_LOCAL_DTTM); "
+    Set rstExperience = mydb.OpenRecordset(strSQL)
+   
+ 
+   ' If the recordset is empty, exit.
+   If rstExperience.EOF Or rstMPOG.EOF Then Exit Sub
+ 
+   With rstExperience
+      Do Until .EOF
+           arrFullName = Split(rstExperience![Name], ", ")
+           strFirstName = arrFullName(1)
+           strLastName = arrFullName(0)
+           MsgBox ("Found you" + strFirstName)
+         With rstMPOG
+            Do Until .EOF
+                If ![First_Name] = strFirstName Then
+                    If ![Last_Name] = strLastName Then
+                    MsgBox ("Found you" + strFirstName)
+                    'rstExperience.Edit
+                    'rstExperience!AIMS_Staff_ID = rstMPOG!AIMS_Staff_ID
+                    'rstExperience.Update
+           End If
+           End If
+           Loop
+         End With
+        .MoveNext
+        Loop
+     End With
+     
+        
+   rstMPOG.Close
+   rstExperience.Close
+    mydb.Close
+    
+    
+   Set rstExperience = Nothing
+   Set rstMPOG = Nothing
+   Set mydb = Nothing
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+Sub handleoverlappingcasetime(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE HoursWorked " _
+            & "(ANES_PROVIDER CHAR, " _
+            & "SURGERY_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROVIDER, SURGERY_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    strSQL0 = "SELECT DISTINCT [Anesthesia Minutes Data].SURGERY_DATE, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_TYPE)=""Anesthesiologist""));"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+           ' strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & uniqueanesthesiologistsNdates!SURGERY_DATE & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    
+
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'Check for null values in start or stop times
+            Do Until Not (IsNull(crosscheckrecords!Anes_Start) Or IsNull(crosscheckrecords!Anes_End))
+                
+                crosscheckrecords.MoveNext
+            
+            Loop
+            If Not crosscheckrecords.EOF Then
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           If Not (lastendtime = "" Or firststarttime = "") Then
+           mydb.Execute ("INSERT INTO HoursWorked (ANES_PROVIDER, SURGERY_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & ", #" & uniqueanesthesiologistsNdates!SURGERY_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+            'strSQL2 = "INSERT INTO HoursWorked (ANES_PROVIDER, SURGERY_DATE, HOURS_WORKED) VALUES (" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & ", #" & uniqueanesthesiologistsNdates!SURGERY_DATE & "#," & """" & totalduration & """" & " )"
+            lastendtime = ""
+            firststarttime = ""
+            End If
+        
+            totalduration = 0
+            
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+Sub handleoverlappinganddatecrossingcasetimes(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE HoursWorked " _
+            & "(ANES_PROVIDER CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROVIDER, ANES_START_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    'strSQL0 = "SELECT DISTINCT DateValue( [Anesthesia Minutes Data].ANES_START) AS ANES_START_DATE,  [Anesthesia Minutes Data].ANES_PROV_ID, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_TYPE=""Anesthesiologist"";"
+     strSQL0 = "SELECT DISTINCT ANES_START_DATE,  ANES_PROVIDER FROM [Non_Null_Anesthesia_Minutes_Data];"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+            'strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And [Anesthesia Minutes Data].ANES_PROV_ID =" & uniqueanesthesiologistsNdates!ANES_PROV_ID & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    strSQL2 = "SELECT Non_Null_Anesthesia_Minutes_Data.ANES_START, Non_Null_Anesthesia_Minutes_Data.ANES_END, Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE FROM Non_Null_Anesthesia_Minutes_Data WHERE Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE between #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# and #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# AND Non_Null_Anesthesia_Minutes_Data.ANES_PROVIDER = " & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ORDER BY Non_Null_Anesthesia_Minutes_Data.ANES_START ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL2)
+            'Check for null values in start or stop times
+            Do Until Not (IsNull(crosscheckrecords!Anes_Start) Or IsNull(crosscheckrecords!Anes_End))
+                
+                crosscheckrecords.MoveNext
+            
+            Loop
+            If Not crosscheckrecords.EOF Then
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           If Not (lastendtime = "" Or firststarttime = "") Then
+           mydb.Execute ("INSERT INTO HoursWorked (ANES_PROVIDER, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & ", #" & uniqueanesthesiologistsNdates!ANES_START_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+            'strSQL2 = "INSERT INTO HoursWorked (ANES_PROVIDER, SURGERY_DATE, HOURS_WORKED) VALUES (" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & ", #" & uniqueanesthesiologistsNdates!SURGERY_DATE & "#," & """" & totalduration & """" & " )"
+            lastendtime = ""
+            firststarttime = ""
+            End If
+        
+            totalduration = 0
+            
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+
+Sub Testoverlapalgo(HowlongGapbeforeConsideredHome As Integer)
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+
+strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =""Spitzer,Yelena"" ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #3/6/2022#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    
+
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+   
+'Check for null values in start or stop times
+            Do Until Not (IsNull(crosscheckrecords!Anes_Start) Or IsNull(crosscheckrecords!Anes_End))
+                
+                crosscheckrecords.MoveNext
+            
+            Loop
+            If Not crosscheckrecords.EOF Then
+            
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+            
+            
+           crosscheckrecords.Close
+  
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+  
+   Set mydb = Nothing
+   MsgBox (totalduration)
+   MsgBox (firststarttime)
+   MsgBox (lastendtime)
+   
+   Exit Sub
+            
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+'CAMPUS: IIf([LOCATION_NAME] Like ("MOSES*") OR [LOCATION_NAME] Like ("CHAM*"),"MOSES",IIF([LOCATION_NAME] Like ("WEILER*"),"WEILER",IIF([LOCATION_NAME] Like ("WAKEFIELD*"),"WAKEFIELD",IIF([LOCATION_NAME] Like ("HUTCH*"),"HUTCH","UNKNOWN"))))
+'Corrected Assignment Code:iif([AssigntmentCode] Like "X|*" OR IsNull([AssigntmentCode]),(SELECT [AssigntmentCode] FROM Qgenda-First-LastNames WHERE LastName = [CasesByAnesthesiologist-Daily-Hours-Counted].LastName AND FirstName = [CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND Date= DateAdd("d", -1, [CasesByAnesthesiologist-Daily-Hours-Counted].SURGERY_DATE) ),[AssigntmentCode])
+'(SELECT [Qgenda-First-LastNames].AssigntmentCode FROM Qgenda-First-LastNames WHERE [Qgenda-First-LastNames].LastName = [LastName] AND [Qgenda-First-LastNames].FirstName = [FirstName] AND [Qgenda-First-LastNames].Date= DateAdd("d", -1, [SURGERY_DATE]) )
+'(SELECT [Qgenda-First-LastNames].AssigntmentCode FROM Qgenda-First-LastNames WHERE [Qgenda-First-LastNames].LastName =" & """" & [LastName]  & """" & " AND [Qgenda-First-LastNames].FirstName = " & """" & [FirstName] & """" & " AND [Qgenda-First-LastNames].Date= #" & [SURGERY_DATE]& "# )
+'SELECT [Qgenda-First-LastNames].LastName FROM Qgenda-First-LastNames WHERE [Qgenda-First-LastNames].LastName =" & """" & [LastName]  & """" & ")
+'SELECT [Qgenda-First-LastNames].LastName FROM Qgenda-First-LastNames WHERE [Qgenda-First-LastNames].LastName ="Adkins")
+'(SELECT LastName FROM [Qgenda-First-LastNames] WHERE LastName ="Adkins";)
+'Expr1: (SELECT DISTINCT LastName FROM [Qgenda-First-LastNames] WHERE LastName ="Adkins";)
+'Expr1: (SELECT AssigntmentCode FROM [Qgenda-First-LastNames] WHERE LastName =[LastName] AND FirstName = [FirstName] AND Date = [CasesByAnesthesiologist-Daily-Hours-Counted].[SURGERY_DATE];)
+'Expr1: (SELECT DISTINCT LastName FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName;)
+'Working Expr1: (SELECT DISTINCT LastName FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND [Qgenda-First-LastNames].LastName =[CasesByAnesthesiologist-Daily-Hours-Counted].LastName ;)
+'Working Expr1: (SELECT AssigntmentCode FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND [Qgenda-First-LastNames].LastName =[CasesByAnesthesiologist-Daily-Hours-Counted].LastName AND [Qgenda-First-LastNames].Date =[CasesByAnesthesiologist-Daily-Hours-Counted].SURGERY_DATE ;)
+'Expr1: (SELECT AssigntmentCode FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND [Qgenda-First-LastNames].LastName =[CasesByAnesthesiologist-Daily-Hours-Counted].LastName AND [Qgenda-First-LastNames].Date =DateAdd("d", -1, [CasesByAnesthesiologist-Daily-Hours-Counted].SURGERY_DATE);)
+'Working Expr1: (SELECT AssigntmentCode FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND [Qgenda-First-LastNames].LastName =[CasesByAnesthesiologist-Daily-Hours-Counted].LastName AND [Qgenda-First-LastNames].Date =DateAdd("d", -1, [CasesByAnesthesiologist-Daily-Hours-Counted].SURGERY_DATE);)
+'Expr1: IIF ([AssigntmentCode] Like "X|*" OR IsNull([AssigntmentCode]),(SELECT AssigntmentCode FROM [Qgenda-First-LastNames] WHERE [Qgenda-First-LastNames].FirstName =[CasesByAnesthesiologist-Daily-Hours-Counted].FirstName AND [Qgenda-First-LastNames].LastName =[CasesByAnesthesiologist-Daily-Hours-Counted].LastName AND [Qgenda-First-LastNames].Date =DateAdd("d", -1, [CasesByAnesthesiologist-Daily-Hours-Counted].SURGERY_DATE);),[AssigntmentCode])
+'Holiday: IIf(DateValue([DATE])=#1/1/2022# Or DateValue([DATE])=#1/17/2022# Or DateValue([DATE])=#2/21/2022# Or DateValue([DATE])=#5/30/2022# Or DateValue([DATE])=#6/20/2022# Or DateValue([DATE])=#9/5/2022# Or DateValue([DATE])=#11/24/2022# Or DateValue([DATE])=#12/26/2022#,"Y","N")
+'After10PM: IIf((IsNull([ANES_DAY_START])),"N",IIf(Hour(TimeValue([ANES_DAY_END]))>22 OR ([AfterMidnight]="Y"),"Y","N"))
+'After5PM: IIf((IsNull([ANES_DAY_START])),"N",IIf(Hour(TimeValue([ANES_DAY_END]))>17 OR ([AfterMidnight]="Y") OR ([After10PM]="Y"),"Y","N"))
+'Weekend: IIf((IsNull([Date])),"N",IIf((Weekday([Date])=1 Or Weekday([Date])=7),"Y","N"))
+'DayofWeek:Weekday([Date])
+'PositiveMinutes:IIf([Weekend]="N",IIf([After5PM]="Y",DateDiff("n",CDate(DateValue([Date]) & " " & #5:00:00 PM#),[ANES_DAY_END]),0),[MinutesWorked])
+'5PMTime: CDate(DateValue([Date]) & " " & #5:00:00 PM#)
+'NegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf([AssignmentCode]="X |",600,IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>8,DateDiff("n",CDate(DateValue([Date]) & " " & #07:30:00 AM#),[ANES_DAY_START]),0))),0)
+'NegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf([AssignmentCode]="X |",600,IIf(IsNull([ANES_DAY_START]),0,IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>8,DateDiff("n",CDate(DateValue([Date]) & " " & #07:30:00 AM#),[ANES_DAY_START]),0)))),0)
+'NegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf([AssignmentCode]="X |",600,IIf(IsNull([ANES_DAY_START]),0,IIf(DateValue([ANES_DAY_END])=DateValue([ANES_DAY_START]) AND Hour(TimeValue([ANES_DAY_END]))<17,DateDiff("n",[ANES_DAY_END],CDate(DateValue([Date]) & " " & #17:00:00 AM#)),IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>8,DateDiff("n",CDate(DateValue([Date]) & " " & #07:30:00 AM#),[ANES_DAY_START]),0))))),0)
+'ENegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf([AssignmentCode]="X |",600,IIf(IsNull([ANES_DAY_START]),0,IIf(DateValue([ANES_DAY_END])=DateValue([ANES_DAY_START]) AND Hour(TimeValue([ANES_DAY_END]))<17,DateDiff("n",[ANES_DAY_END],CDate(DateValue([Date]) & " " & #17:00:00 AM#)),0),)),0)
+'LNegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf(IsNull([ANES_DAY_START]),0,IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>=10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>=7,DateDiff("n",CDate(DateValue([Date]) & " " & #07:00:00 AM#),[ANES_DAY_START]),0))),0)
+'WeekdayInHouse: IIf([Weekend]="N" Or [Holiday]="N",IIf([AssignmentCode] Like "*ORp*","Y","N"),"N")
+'WeekendInHouse: IIf([Weekend]="Y" Or [Holiday]="Y",IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*ORa*","Y","N"),"N")
+'WeekdayInHouse: IIf(Weekday([Date])=[Weekend]="N" Or [Holiday]="N",IIf([AssignmentCode] Like "*ORp*","Y","N"),"N")
+'PositiveMinutes:IIf([Weekend]="N",IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",870,IIf([After5PM]="Y",DateDiff("n",CDate(DateValue([Date]) & " " & #5:00:00 PM#),[ANES_DAY_END]),0)),IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",720, iif([AssignmentCode] Like "*ORa*" Or [AssignmentCode] Like "*OBa*",720,[MinutesWorked])))
+'PositiveMinutes:IIf([Weekend]="N",IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",870,IIf([After5PM]="Y",DateDiff("n",CDate(DateValue([Date]) & " " & #5:00:00 PM#),[ANES_DAY_END]),0)),iif([AssignmentCode] Like "*ORa |*ORp*" Or [AssignmentCode] Like "*OBa |*OBp*",1440,IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",720, iif([AssignmentCode] Like "*ORa*" Or [AssignmentCode] Like "*OBa*",720,[MinutesWorked]))))
+'LNegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf(IsNull([ANES_DAY_START]),0,iif([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",630,IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>=10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>=7,DateDiff("n",CDate(DateValue([Date]) & " " & #07:00:00 AM#),[ANES_DAY_START]),0)))),0)
+'LNegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",IIf([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",630,iif(IsNull([ANES_DAY_START]),0,IIf(Weekday([Date])=6,IIf(Hour(TimeValue([ANES_DAY_START]))>=10,DateDiff("n",CDate(DateValue([Date]) & " " & #09:30:00 AM#),[ANES_DAY_START]),0),IIf(Hour(TimeValue([ANES_DAY_START]))>=7,DateDiff("n",CDate(DateValue([Date]) & " " & #07:00:00 AM#),[ANES_DAY_START]),0)))),0)
+'ENegativeMinutes:IIf([Weekend]="N" AND [Holiday]="N",iif([AssignmentCode] Like "*ORp*" Or [AssignmentCode] Like "*OBp*",0,IIf([AssignmentCode]="X |",600,IIf(IsNull([ANES_DAY_START]),0,IIf(DateValue([ANES_DAY_END])=DateValue([ANES_DAY_START]) AND Hour(TimeValue([ANES_DAY_END]))<17,DateDiff("n",[ANES_DAY_END],CDate(DateValue([Date]) & " " & #17:00:00 AM#)),0)))),0)
+Sub handleoverlappingandhandleX(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE HoursWorked " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    'strSQL0 = "SELECT DISTINCT DateValue( [Anesthesia Minutes Data].ANES_START) AS ANES_START_DATE,  [Anesthesia Minutes Data].ANES_PROV_ID, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_TYPE=""Anesthesiologist"";"
+     strSQL0 = "SELECT DISTINCT ANES_START_DATE,  ANES_PROV_ID FROM [Non_Null_Anesthesia_Minutes_Data];"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+            'strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And [Anesthesia Minutes Data].ANES_PROV_ID =" & uniqueanesthesiologistsNdates!ANES_PROV_ID & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    strSQL1 = "SELECT Non_Null_Anesthesia_Minutes_Data.ANES_START, Non_Null_Anesthesia_Minutes_Data.ANES_END, Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE FROM Non_Null_Anesthesia_Minutes_Data WHERE Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE between #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# and #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# AND Non_Null_Anesthesia_Minutes_Data.ANES_PROV_ID = " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " ORDER BY Non_Null_Anesthesia_Minutes_Data.ANES_START ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'Check for null values in start or stop times
+
+            If Not crosscheckrecords.EOF Then
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           'If starttime between 12 am and 6:45 am - add the total duration to previous day totalduration and update the previous day end time to this end time
+           If ((0 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) <= 5) Or ((6 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) < 7) And (0 <= Minute(TimeValue(firststarttime)) And Minute(TimeValue(firststarttime)) <= 45))) Then
+            
+                
+                'starttime between midnight and 6:50
+                'open the record for this Anes_provider from the day before
+                'Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROVIDER= "Vivek, Kumar " AND ANES_START_DATE = DateAdd("d", -1, [EnterDate]) ;
+                strSQL2 = "Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;"
+                Set previousdayrecords = mydb.OpenRecordset(strSQL2)
+                
+                'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
+                If Not previousdayrecords.EOF Then
+                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                        'difference more than acceptablegap
+                        totalduration = totalduration + previousdayrecords!HOURS_WORKED
+                    Else
+                        'difference less than acceptable gap
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                    End If
+                    'update the previous day record for this anes_provider
+                    mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
+                    lastendtime = ""
+                    firststarttime = ""
+                    totalduration = 0
+                Else
+                    'previousdayrecords.EOF
+                    'Need to insert this data as the previous day data
+                    If Not (lastendtime = "" Or firststarttime = "") Then
+                        mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+
+                    
+                End If
+                
+           Else
+                'starttime not between midnight and 6 am.
+                If Not (lastendtime = "" Or firststarttime = "") Then
+                    mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & uniqueanesthesiologistsNdates!ANES_START_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+            End If
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+   previousdayrecords.Close
+   
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set previousdayrecords = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+Sub handlepositiveANDnegativeHOURS(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE PosNegHoursWorked " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "POSITIVE_HOURS NUMBER, " _
+            & "NEGATIVE_HOURS NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    'strSQL0 = "SELECT DISTINCT DateValue( [Anesthesia Minutes Data].ANES_START) AS ANES_START_DATE,  [Anesthesia Minutes Data].ANES_PROV_ID, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_TYPE=""Anesthesiologist"";"
+     strSQL0 = "SELECT DISTINCT ANES_START_DATE,  ANES_PROV_ID FROM [Non_Null_Anesthesia_Minutes_Data];"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+            'strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And [Anesthesia Minutes Data].ANES_PROV_ID =" & uniqueanesthesiologistsNdates!ANES_PROV_ID & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    strSQL1 = "SELECT Non_Null_Anesthesia_Minutes_Data.ANES_START, Non_Null_Anesthesia_Minutes_Data.ANES_END, Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE FROM Non_Null_Anesthesia_Minutes_Data WHERE Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE between #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# and #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# AND Non_Null_Anesthesia_Minutes_Data.ANES_PROV_ID = " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " ORDER BY Non_Null_Anesthesia_Minutes_Data.ANES_START ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'Check for null values in start or stop times
+
+            If Not crosscheckrecords.EOF Then
+            'firststarttime = crosscheckrecords!ANES_START
+            'Calculating positive hours so first check if start time is after 5 pm and if it is - then start there. If the start time is after 8 am on M-Th or after 10 am on F then count 7 am to Start time as negative hours
+            'if post call count 10 negative hours.
+            
+            
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           'If starttime between 12 am and 6:45 am - add the total duration to previous day totalduration and update the previous day end time to this end time
+           If ((0 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) <= 5) Or ((6 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) < 7) And (0 <= Minute(TimeValue(firststarttime)) And Minute(TimeValue(firststarttime)) <= 45))) Then
+            
+                
+                'starttime between midnight and 6:50
+                'open the record for this Anes_provider from the day before
+                'Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROVIDER= "Vivek, Kumar " AND ANES_START_DATE = DateAdd("d", -1, [EnterDate]) ;
+                strSQL2 = "Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;"
+                Set previousdayrecords = mydb.OpenRecordset(strSQL2)
+                
+                'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
+                If Not previousdayrecords.EOF Then
+                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                        'difference more than acceptablegap
+                        totalduration = totalduration + previousdayrecords!HOURS_WORKED
+                    Else
+                        'difference less than acceptable gap
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                    End If
+                    'update the previous day record for this anes_provider
+                    mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
+                    lastendtime = ""
+                    firststarttime = ""
+                    totalduration = 0
+                Else
+                    'previousdayrecords.EOF
+                    'Need to insert this data as the previous day data
+                    If Not (lastendtime = "" Or firststarttime = "") Then
+                        mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+
+                    
+                End If
+                
+           Else
+                'starttime not between midnight and 6 am.
+                If Not (lastendtime = "" Or firststarttime = "") Then
+                    mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & uniqueanesthesiologistsNdates!ANES_START_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+            End If
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+   previousdayrecords.Close
+   
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set previousdayrecords = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+Sub updateQgendaEpicProvIDTable()
+'Open query Qgenda-Attendings-Distinct
+'Check if we already have a prov id for this name in Qgenda_Epic_ProvID table
+'If not -
+'Split the name into last and first
+'Open Epic_ProvID_Names query
+'Split the Epic Name into first and last and match it with qgenda
+'If match - append the table Qgenda_Epic_ProvID
+'Loop
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2, strSQL3, strSQL4, QgendaFirstName, QgendaLastName, EpicFirstName, EpicLastName As String
+Dim qgendaattendings, attendingsalreadyindatabase, attendingsinepic, attendingsnotinqgenda As DAO.Recordset
+
+strSQL0 = "Select * FROM [Qgenda-Attendings-Distinct]"
+
+
+On Error GoTo ErrorHandler
+Set mydb = CurrentDb()
+Set qgendaattendings = mydb.OpenRecordset(strSQL0)
+    With qgendaattendings
+        Do Until .EOF
+
+              strSQL1 = "SELECT * FROM Qgenda_Epic_ProvID WHERE (((Qgenda_Epic_ProvID.Name)=" & """" & qgendaattendings!Name & """" & "));"
+
+            Set attendingsalreadyindatabase = mydb.OpenRecordset(strSQL1)
+
+            If attendingsalreadyindatabase.EOF Then
+                'This Qgenda attending is not in the epic prov id database. Let's close this recordset and find their Prov ID
+                attendingsalreadyindatabase.Close
+                'Then - let's see if there is a one to one match in the Epic_ProvID_Names
+                strSQL2 = "SELECT * FROM Epic_ProvID_Names WHERE (((Epic_ProvID_Names.ANES_PROVIDER)=" & """" & qgendaattendings!Name & """" & "));"
+
+                Set attendingsinepic = mydb.OpenRecordset(strSQL2)
+
+                If attendingsinepic.EOF Then
+                    'There is no direct/one to one Match. Close the recordset
+                    attendingsinepic.Close
+                    'Let's split the Qgenda and Epic names into F and L and try to find a match
+                    QgendaFirstName = Split(Split(qgendaattendings!Name, ",")(1))(1) 'Second split removes the extra space
+                    QgendaLastName = Split(qgendaattendings!Name, ",")(0)
+                    'Open a new dataset of all the epic names and prov id
+                    strSQL3 = "SELECT * FROM Epic_ProvID_Names"
+                    Set attendingsnotinqgenda = mydb.OpenRecordset(strSQL3)
+                    
+                    
+                    With attendingsnotinqgenda
+                        Do Until .EOF
+                        
+                            'split the name
+                    
+                            EpicFirstName = Split(Split(attendingsnotinqgenda!ANES_PROVIDER, ",")(1))(1)
+                            EpicLastName = Split(attendingsnotinqgenda!ANES_PROVIDER, ",")(0)
+                            'Check if the last name matches
+                            If EpicLastName = QgendaLastName Then
+                                'Last Name matches so check the first name
+                                
+                                If EpicFirstName = QgendaFirstName Then
+                                    'This is the record we want
+                                    mydb.Execute ("INSERT INTO Qgenda_Epic_ProvID (Name, ANES_PROV_ID, ANES_Provider) VALUES (" & """" & qgendaattendings!Name & """" & ", " & """" & attendingsnotinqgenda!Anes_Prov_ID & """" & ", " & """" & attendingsnotinqgenda!ANES_PROVIDER & """" & "  )")
+                                    'strSQL4 = "INSERT INTO Qgenda_Epic_ProvID (Name, ANES_PROV_ID, ANES_Provider) VALUES (" & """" & qgendaattendings!Name & """" & ", " & """" & attendingsnotinqgenda!ANES_PROV_ID & """" & ", " & """" & attendingsnotinqgenda!ANES_PROVIDER & """" & "  )"
+                                    
+                                    
+                            
+                        
+                                End If
+                            End If
+                                'Last Name doesn't match so keep going
+                    
+                            .MoveNext
+                        Loop
+                    End With
+                                    
+                Else
+                    'There is a direct one to one match. Let's update our Qgenda_Epic_ProvID table with this record
+                    mydb.Execute ("INSERT INTO Qgenda_Epic_ProvID (Name, ANES_PROV_ID, ANES_Provider) VALUES (" & """" & qgendaattendings!Name & """" & ", " & """" & attendingsinepic!Anes_Prov_ID & """" & ", " & """" & attendingsinepic!ANES_PROVIDER & """" & "  )")
+
+                End If
+
+            End If
+
+            .MoveNext
+        Loop
+    End With
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+
+End Sub
+
+
+Sub CalculateHoursWorked(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE HoursWorked " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    'strSQL0 = "SELECT DISTINCT DateValue( [Anesthesia Minutes Data].ANES_START) AS ANES_START_DATE,  [Anesthesia Minutes Data].ANES_PROV_ID, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_TYPE=""Anesthesiologist"";"
+     strSQL0 = "SELECT DISTINCT ANES_START_DATE,  ANES_PROV_ID FROM [Non_Null_Anesthesia_Minutes_Data];"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+            'strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And [Anesthesia Minutes Data].ANES_PROV_ID =" & uniqueanesthesiologistsNdates!ANES_PROV_ID & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    strSQL1 = "SELECT Non_Null_Anesthesia_Minutes_Data.ANES_START, Non_Null_Anesthesia_Minutes_Data.ANES_END, Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE FROM Non_Null_Anesthesia_Minutes_Data WHERE Non_Null_Anesthesia_Minutes_Data.ANES_START_DATE between #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# and #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# AND Non_Null_Anesthesia_Minutes_Data.ANES_PROV_ID = " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " ORDER BY Non_Null_Anesthesia_Minutes_Data.ANES_START ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'Check for null values in start or stop times
+
+            If Not crosscheckrecords.EOF Then
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           'If starttime between 12 am and 6:45 am - add the total duration to previous day totalduration and update the previous day end time to this end time
+           If ((0 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) <= 5) Or ((6 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) < 7) And (0 <= Minute(TimeValue(firststarttime)) And Minute(TimeValue(firststarttime)) <= 45))) Then
+            
+                
+                'starttime between midnight and 6:50
+                'open the record for this Anes_provider from the day before
+                'Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROVIDER= "Vivek, Kumar " AND ANES_START_DATE = DateAdd("d", -1, [EnterDate]) ;
+                strSQL2 = "Select HOURS_WORKED, ANES_DAY_END from HoursWorked where ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;"
+                Set previousdayrecords = mydb.OpenRecordset(strSQL2)
+                
+                'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
+                If Not previousdayrecords.EOF Then
+                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                        'difference more than acceptablegap
+                        totalduration = totalduration + previousdayrecords!HOURS_WORKED
+                    Else
+                        'difference less than acceptable gap
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                    End If
+                    'update the previous day record for this anes_provider
+                    mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
+                    lastendtime = ""
+                    firststarttime = ""
+                    totalduration = 0
+                Else
+                    'previousdayrecords.EOF
+                    'Need to insert this data as the previous day data
+                    If Not (lastendtime = "" Or firststarttime = "") Then
+                        mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+
+                    
+                End If
+                
+           Else
+                'starttime not between midnight and 6 am.
+                If Not (lastendtime = "" Or firststarttime = "") Then
+                    mydb.Execute ("INSERT INTO HoursWorked (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & uniqueanesthesiologistsNdates!ANES_START_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+            End If
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+   previousdayrecords.Close
+   
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set previousdayrecords = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
+
+    Dim mydb As DAO.Database
+    Dim rsShiftTimes As DAO.Recordset
+    Dim rsAnesData As DAO.Recordset
+    Dim rsHolidays As DAO.Recordset
+    Dim strSQL As String
+    Dim Anes_Prov_ID As String
+    Dim QgendaDate As Date
+    Dim Anes_Start As Date
+    Dim Anes_End As Date
+    Dim ShiftStart As Date
+    Dim ShiftEnd As Date
+    Dim TotalMinutesWorked As Integer
+    Dim PositiveMinutes As Integer
+    Dim LateStartNegativeMinutes As Integer
+    Dim EarlyReliefNegativeMinutes As Integer
+    Dim PostCallNegativeMinutes As Integer
+
+    Set mydb = CurrentDb()
+  '  mydb.Execute "CREATE TABLE NewHoursWorked " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ASSIGNMENTNAME CHAR, " _
+            & "QGENDA_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "POSITIVEMINUTES NUMBER, " _
+            & "EARLYRELIEFNEGATIVEMINUTES NUMBER, " _
+            & "LATESTARTNEGATIVEMINUTES NUMBER, " _
+            & "POSTCALLNEGATIVEMINUTES NUMBER, " _
+            & "CONSTRAINT HoursWorked UNIQUE " _
+            & "(ANES_PROV_ID, QGENDA_DATE, HOURS_WORKED));"
+
+    ' Loop through each shift
+    Set rsShiftTimes = mydb.OpenRecordset("SELECT * FROM ShiftTimes")
+    
+    Do Until rsShiftTimes.EOF
+        'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments " & _
+                 "WHERE AssignmentName LIKE '*" & rsShiftTimes!AssignmentName & "*' " & _
+                 "AND Weekday(QgendaDate) = " & rsShiftTimes!DayofTheWeek
+                 
+                 
+        Dim AnesProvIDCondition As String
+If Not IsNull(Anes_Prov_ID) And Anes_Prov_ID <> "" Then
+    AnesProvIDCondition = "AND Anes_Prov_ID = " & Anes_Prov_ID & " "
+Else
+    AnesProvIDCondition = ""  ' Exclude condition if Anes_Prov_ID is empty
+End If
+        
+        
+'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments " & _
+                 "WHERE AssignmentName LIKE '*" & rsShiftTimes!AssignmentName & "*' " & _
+                 "AND Weekday(QgendaDate) = " & rsShiftTimes!DayofTheWeek
+
+   strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
+         "WHERE S_AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
+         "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
+
+'      MsgBox (strSQL)
+       
+ '      InputBox "Copy the value below:", "Copy Value", strSQL
+        
+        
+        
+        Set rsAnesData = mydb.OpenRecordset(strSQL)
+        
+        Do Until rsAnesData.EOF
+        
+        Anes_Prov_ID = Nz(rsAnesData!Anes_Prov_ID, 0) ' Default to 0 if Null
+QgendaDate = Nz(rsAnesData!QgendaDate, Date) ' Default to current date
+Anes_Start = Nz(rsAnesData!Anes_Start, #1/1/1900#) ' Default to some safe date
+Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#) ' Default to some safe date
+        
+        'Anes_Prov_ID = rsAnesData!Anes_Prov_ID
+         '   QgendaDate = rsAnesData!QgendaDate
+          '  Anes_Start = CDate(rsAnesData!Anes_Start)
+           ' Anes_End = CDate(rsAnesData!Anes_End)
+            
+            ' Determine shift times
+            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!StartTime)
+            If rsShiftTimes!StopTime < rsShiftTimes!StartTime Then
+                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!StopTime)
+            Else
+                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!StopTime)
+            End If
+
+
+
+' Convert ShiftStart and ShiftEnd to proper SQL date format
+ShiftStart = Format(ShiftStart, "mm/dd/yyyy hh:nn:ss AMPM")
+ShiftEnd = Format(ShiftEnd, "mm/dd/yyyy hh:nn:ss AMPM")
+
+
+'rsAnesData.Filter = "(Anes_Prov_ID = " & Anes_Prov_ID & ") AND " & _
+                    "((Anes_Start >= #" & ShiftStart & "# AND Anes_Start <= #" & ShiftEnd & "#) OR " & _
+                    "(Anes_End >= #" & ShiftStart & "# AND Anes_End <= #" & ShiftEnd & "#))"
+
+'Set rsFiltered = rsAnesData.OpenRecordset()  ' This creates a new filtered recordset
+
+
+filterStr = "(Anes_Prov_ID = '" & Anes_Prov_ID & "') AND " & _
+                "((Anes_Start >= #" & ShiftStart & "# AND Anes_Start <= #" & ShiftEnd & "#) OR " & _
+                "(Anes_End >= #" & ShiftStart & "# AND Anes_End <= #" & ShiftEnd & "#))"
+
+
+rsAnesData.Filter = filterStr
+
+'InputBox "Copy the value below:", "Copy Value", filterStr
+
+
+On Error GoTo ErrorHandler
+' Open filtered recordset
+Set rsFiltered = rsAnesData.OpenRecordset()  ' Ensure rsAnesData is a DAO recordset
+
+
+
+                ' Accumulate minutes worked
+                TotalMinutesWorked = TotalMinutesWorked + DateDiff("n", Anes_Start, Anes_End)
+
+                ' Categorize positive/negative minutes
+                If Weekday(QgendaDate) = 1 Or Weekday(QgendaDate) = 7 Or _
+                   Not mydb.OpenRecordset("SELECT * FROM Holidays WHERE HolidayDate=#" & QgendaDate & "#").EOF Then
+                    PositiveMinutes = PositiveMinutes + DateDiff("n", Anes_Start, Anes_End)
+                Else
+                    If Hour(Anes_Start) >= 7 And Hour(Anes_End) <= 17 Then
+                        PositiveMinutes = PositiveMinutes + DateDiff("n", Anes_Start, Anes_End)
+                    ElseIf Anes_Start > (QgendaDate + #7:00:00 AM#) Then
+                        LateStartNegativeMinutes = DateDiff("n", QgendaDate + #7:00:00 AM#, Anes_Start)
+                    ElseIf Anes_End < (QgendaDate + #5:00:00 PM#) Then
+                        EarlyReliefNegativeMinutes = DateDiff("n", Anes_End, QgendaDate + #5:00:00 PM#)
+                    End If
+                End If
+                
+                ' Post Call Negative Minutes
+                If Anes_End > (QgendaDate + #11:00:00 PM#) Then
+                    If mydb.OpenRecordset("SELECT * FROM Holidays WHERE HolidayDate=#" & QgendaDate + 1 & "#").EOF Then
+                        If Weekday(QgendaDate + 1) <> 1 And Weekday(QgendaDate + 1) <> 7 Then
+                            PostCallNegativeMinutes = 600
+                        End If
+                    End If
+                End If
+
+            
+            rsAnesData.MoveNext
+        Loop
+        
+        ' Store computed results
+        
+mydb.Execute "INSERT INTO NewHoursWorked (ASSIGNMENTNAME, ANES_PROV_ID, QGENDA_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END, POSITIVEMINUTES, EARLYRELIEFNEGATIVEMINUTES, LATESTARTNEGATIVEMINUTES, POSTCALLNEGATIVEMINUTES) " & _
+             "VALUES ('" & AssignmentName & "', '" & Anes_Prov_ID & "', #" & QgendaDate & "#, " & TotalMinutesWorked & ", #" & ShiftStart & "#, #" & ShiftEnd & "#, " & PositiveMinutes & ", " & EarlyReliefNegativeMinutes & ", " & LateStartNegativeMinutes & ", " & PostCallNegativeMinutes & ");"
+
+        rsShiftTimes.MoveNext
+    Loop
+
+    ' Cleanup
+    rsShiftTimes.Close
+    Set rsShiftTimes = Nothing
+    Set rsAnesData = Nothing
+    Set rsHolidays = Nothing
+    Set mydb = Nothing
+    
+ErrorHandler:
+If Err.Number = 94 Then ' "Invalid use of Null"
+    MsgBox "A Null value was found. Assigning default values.", vbInformation
+    Anes_Prov_ID = 0
+    QgendaDate = Date
+    Anes_Start = #1/1/1900#
+    Anes_End = #1/1/1900#
+    Resume Next ' Continue execution
+Else
+    MsgBox "Unexpected error: " & Err.Description, vbCritical, "Error " & Err.Number
+    Resume Next
+End If
+
+End Sub
+
+Sub ExportShiftDataToExcel()
+    Dim mydb As DAO.Database
+    Dim rsShiftTimes As DAO.Recordset
+    Dim rsAnesData As DAO.Recordset
+    Dim rsFiltered As DAO.Recordset
+    Dim xlApp As Object ' Excel.Application
+    Dim xlBook As Object ' Excel.Workbook
+    Dim xlSheet As Object ' Excel.Worksheet
+    Dim sheetIndex As Integer
+    Dim strSQL As String
+    Dim filterStr As String
+    Dim Anes_Prov_ID As String
+    Dim QgendaDate As Date
+    Dim Anes_Start As Date
+    Dim Anes_End As Date
+    Dim ShiftStart As Date
+    Dim ShiftEnd As Date
+    
+    On Error GoTo ErrorHandler
+    
+    ' Open database
+    Set mydb = CurrentDb()
+    Set rsShiftTimes = mydb.OpenRecordset("SELECT * FROM ShiftTimes")
+    Debug.Print "Database opened"
+    ' Create Excel instance
+    Set xlApp = CreateObject("Excel.Application")
+    xlApp.Visible = False ' Set to True if debugging
+    Set xlBook = xlApp.Workbooks.Add
+    sheetIndex = 1
+    Debug.Print "Excel Workbook created"
+    
+    ' Loop through each shift
+    Do Until rsShiftTimes.EOF
+        
+         Debug.Print "Processing " & rsShiftTimes!AssignmentName & " AND " & rsShiftTimes!DayName
+
+         
+
+        
+        
+        
+        ' Build SQL query to fetch Anesthesia data
+        'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments_w_x_ShiftTimes " & _
+                 "WHERE S.AssignmentName = " & rsShiftTimes!AssignmentName & " " & _
+                 "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
+                 
+        'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments_w_x_ShiftTimes " & _
+         "WHERE S.AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
+         "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
+        
+        strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
+         "WHERE S_AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
+         "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
+        
+        Set rsAnesData = mydb.OpenRecordset(strSQL)
+        'Debug.Print strSQL
+        'Debug.Print strSQL1
+
+
+
+            
+           
+
+
+
+
+       
+        ' Process each record in rsAnesData
+        If Not rsAnesData.EOF Then
+            ' Add new sheet
+            If sheetIndex > xlBook.Sheets.Count Then
+                xlBook.Sheets.Add After:=xlBook.Sheets(xlBook.Sheets.Count)
+            End If
+            Set xlSheet = xlBook.Sheets(sheetIndex)
+            xlSheet.Name = rsShiftTimes!AssignmentName & "_" & rsShiftTimes!DayName
+
+            
+            ' Write column headers
+            Dim col As Integer, row As Integer
+            col = 1
+            row = 1
+            
+            Dim fld As DAO.Field
+            For Each fld In rsAnesData.Fields
+                xlSheet.Cells(row, col).Value = fld.Name
+                col = col + 1
+            Next fld
+            
+            row = 2 ' Start writing data
+            
+            ' Filter and export relevant data
+            Do Until rsAnesData.EOF
+                Anes_Prov_ID = Nz(rsAnesData!Anes_Prov_ID, 0)
+                QgendaDate = Nz(rsAnesData!QgendaDate, Date)
+                Anes_Start = Nz(rsAnesData!Anes_Start, #1/1/1900#)
+                Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#)
+                
+                 ' Determine shift times
+            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStartTime)
+            If rsShiftTimes!ShiftStopTime < rsShiftTimes!ShiftStartTime Then
+                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!ShiftStopTime)
+            Else
+                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStopTime)
+            End If
+
+
+
+' Convert ShiftStart and ShiftEnd to proper SQL date format
+ShiftStart = Format(ShiftStart, "mm/dd/yyyy hh:nn:ss AMPM")
+ShiftEnd = Format(ShiftEnd, "mm/dd/yyyy hh:nn:ss AMPM")
+
+              If (Anes_Start >= ShiftStart And Anes_Start <= ShiftEnd) Or _
+   (Anes_End >= ShiftStart And Anes_End <= ShiftEnd) Then
+                
+                            ' Process each record
+                            Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                            col = 1
+                            For Each fld In rsAnesData.Fields
+                                xlSheet.Cells(row, col).Value = Nz(fld.Value, "")
+                                col = col + 1
+                            Next fld
+                            row = row + 1
+                Else
+                Debug.Print "Skipped"
+                
+                End If
+                ' Move to next record in rsAnesData
+                rsAnesData.MoveNext
+            Loop
+        End If ' End If for rsAnesData.EOF check
+         Debug.Print "Finished Processing " & rsShiftTimes!AssignmentName & " AND " & rsShiftTimes!DayName
+        
+        ' Move to next shift
+        rsShiftTimes.MoveNext
+        sheetIndex = sheetIndex + 1
+    Loop
+    
+    ' Save workbook
+    Dim savePath As String
+    savePath = "./ShiftData.xlsx"
+    xlBook.SaveAs savePath
+    xlBook.Close
+    xlApp.Quit
+    
+    ' Cleanup
+    Set rsAnesData = Nothing
+    Set rsShiftTimes = Nothing
+    Set xlSheet = Nothing
+    Set xlBook = Nothing
+    Set xlApp = Nothing
+    Set mydb = Nothing
+    
+    MsgBox "Export Complete: " & savePath, vbInformation
+    
+    Exit Sub ' Ensure error handling is not triggered unnecessarily
+    
+ErrorHandler:
+    If Err.Number = 94 Then ' "Invalid use of Null"
+        MsgBox "A Null value was found. Assigning default values.", vbInformation
+        Anes_Prov_ID = 0
+        QgendaDate = Date
+        Anes_Start = #1/1/1900#
+        Anes_End = #1/1/1900#
+        Resume Next ' Continue execution
+    Else
+        MsgBox "Unexpected error: " & Err.Description, vbCritical, "Error " & Err.Number
+        Resume Next
+    End If
+End Sub
+
+
+
+Sub ProcessShiftSheets()
+    Dim xlApp As Object
+    Dim wbShiftData As Object
+    Dim wbShiftDefs As Object
+    Dim wsDef As Object
+    Dim wsData As Object
+    Dim sheetName As String
+    Dim lastRow As Long
+    Dim i As Long
+
+    Dim AssignmentName As String
+    Dim Day As String
+    Dim sheetIndex As Integer
+    Dim howLongGapBeforeHome As Integer
+    howLongGapBeforeHome = 60 ' example threshold, adjust as needed
+
+    On Error GoTo ErrorHandler
+
+    ' Create Excel instance
+    Set xlApp = CreateObject("Excel.Application")
+    xlApp.Visible = False
+
+    ' Open both Excel files
+    Set wbShiftDefs = xlApp.Workbooks.Open("H:\Downloads\python-work\PointSystem\ShiftTimesDays.xlsx")
+    Set wbShiftData = xlApp.Workbooks.Open("H:\Downloads\python-work\PointSystem\ShiftDataPrev.xlsx")
+    Set wsDef = wbShiftDefs.Sheets(1) ' Assuming shift definitions are in first sheet
+
+    ' Get last used row in shift definition table
+    lastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(-4162).row ' xlUp = -4162
+
+    ' Loop through each row in shift definitions
+    For i = 2 To lastRow ' Assuming row 1 is header
+        AssignmentName = Trim(wsDef.Cells(i, 2).Value) ' AssignmentName
+        Day = Trim(wsDef.Cells(i, 12).Value) ' Day (3rd column)
+
+        sheetName = AssignmentName & "_" & Day
+         
+        On Error Resume Next
+        Set wsData = wbShiftData.Sheets(sheetName)
+        On Error GoTo ErrorHandler
+
+        If Not wsData Is Nothing Then
+            ' Optional: Pass the sheet directly or read data into a recordset-like structure
+            Debug.Print "Processing sheet: " & sheetName
+
+            ' Call your processing subroutine
+            'Call CalculateHoursWorkedOnSheet(wsData, howLongGapBeforeHome)
+       
+        Else
+            Debug.Print "Sheet not found: " & sheetName
+        End If
+
+        Set wsData = Nothing
+    Next i
+
+
+
+
+
+    ' Cleanup
+    wbShiftDefs.Close False
+    wbShiftData.Close False
+    xlApp.Quit
+
+    Set wsDef = Nothing
+    Set wbShiftDefs = Nothing
+    Set wbShiftData = Nothing
+    Set xlApp = Nothing
+
+    MsgBox "Processing complete.", vbInformation
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error occurred: " & Err.Description, vbCritical
+    If Not xlApp Is Nothing Then xlApp.Quit
+End Sub
+
+
+Sub ProcessShiftSheets1()
+    Dim xlApp As Object
+    Dim wbShiftData As Object
+    Dim wbShiftDefs As Object
+    Dim wbAggregated As Object
+    Dim wsDef As Object
+    Dim wsData As Object
+    Dim wsOut As Object
+    Dim sheetName As String
+    Dim lastRow As Long
+    Dim i As Long
+
+    Dim AssignmentName As String
+    Dim Day As String
+    Dim howLongGapBeforeHome As Integer
+    howLongGapBeforeHome = 60 ' example threshold, adjust as needed
+
+    On Error GoTo ErrorHandler
+
+    ' Create Excel instance
+    Set xlApp = CreateObject("Excel.Application")
+    xlApp.Visible = False
+
+    ' Open both Excel files
+    Set wbShiftDefs = xlApp.Workbooks.Open("H:\Downloads\python-work\PointSystem\ShiftTimesDays.xlsx")
+    Set wbShiftData = xlApp.Workbooks.Open("H:\Downloads\python-work\PointSystem\ShiftDataPrev.xlsx")
+    Set wsDef = wbShiftDefs.Sheets(1) ' Assuming shift definitions are in first sheet
+
+    ' Create new workbook for output
+    Set wbAggregated = xlApp.Workbooks.Add
+
+    ' Get last used row in shift definition table
+    lastRow = wsDef.Cells(wsDef.Rows.Count, 1).End(-4162).row ' xlUp = -4162
+
+    ' Loop through each row in shift definitions
+    For i = 2 To lastRow ' Assuming row 1 is header
+        AssignmentName = Trim(wsDef.Cells(i, 2).Value) ' AssignmentName
+        Day = Trim(wsDef.Cells(i, 12).Value) ' Day
+
+        sheetName = AssignmentName & "_" & Day
+
+        On Error Resume Next
+        Set wsData = wbShiftData.Sheets(sheetName)
+        On Error GoTo ErrorHandler
+
+        If Not wsData Is Nothing Then
+            Debug.Print "Processing sheet: " & sheetName
+
+            ' Add output sheet to aggregated workbook
+            Set wsOut = wbAggregated.Sheets.Add(After:=wbAggregated.Sheets(wbAggregated.Sheets.Count))
+            wsOut.Name = sheetName
+
+            ' Write headers
+            With wsOut
+                .Cells(1, 1).Value = "B.ID"
+                .Cells(1, 2).Value = "B.QgendaName"
+                .Cells(1, 3).Value = "QgendaDate"
+                .Cells(1, 4).Value = "AssignmentName"
+                .Cells(1, 5).Value = "TotalMinutesWorked"
+                .Cells(1, 6).Value = "PositiveMinutes"
+                .Cells(1, 7).Value = "EarlyReliefNegativeMinutes"
+                .Cells(1, 8).Value = "LateStartNegativeMinutes"
+                .Cells(1, 9).Value = "PostCallNegativeMinutes"
+                .Cells(1, 10).Value = "NegativeMinutes"
+                .Cells(1, 11).Value = "HOLIDAY_YN"
+            End With
+
+            ' Get results from your subroutine (you must define how this returns the data)
+            Dim results As Variant
+            results = CalculateHoursWorkedOnSheet(wsData, howLongGapBeforeHome)
+
+            ' Write results to the output sheet (assumes results is a 2D array)
+            Dim r As Long, c As Long
+            For r = 1 To UBound(results, 1)
+                For c = 1 To UBound(results, 2)
+                    wsOut.Cells(r + 1, c).Value = results(r, c)
+                Next c
+            Next r
+
+        Else
+            Debug.Print "Sheet not found: " & sheetName
+        End If
+
+        Set wsData = Nothing
+        Set wsOut = Nothing
+    Next i
+
+    ' Save the aggregated output
+    wbAggregated.SaveAs "H:\Downloads\python-work\PointSystem\ShiftDataAggregated.xlsx"
+    wbAggregated.Close SaveChanges:=False
+
+    ' Cleanup
+    wbShiftDefs.Close False
+    wbShiftData.Close False
+    xlApp.Quit
+
+    Set wsDef = Nothing
+    Set wbShiftDefs = Nothing
+    Set wbShiftData = Nothing
+    Set wbAggregated = Nothing
+    Set xlApp = Nothing
+
+    MsgBox "Processing complete.", vbInformation
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error occurred: " & Err.Description, vbCritical
+    If Not xlApp Is Nothing Then xlApp.Quit
+End Sub
+
+Function GetCol(ws As Object, headerName As String) As Integer
+    Dim col As Integer
+    For col = 1 To ws.UsedRange.Columns.Count
+        If Trim(ws.Cells(1, col).Value) = headerName Then
+            GetCol = col
+            Exit Function
+        End If
+    Next col
+    MsgBox "Column '" & headerName & "' not found!", vbCritical
+    GetCol = -1
+End Function
+Function CalculateHoursWorkedOnSheet(ws As Object, howLongGapBeforeHome As Integer) As Variant
+    Dim lastRow As Long, i As Long
+    Dim results() As Variant
+    Dim rowCount As Long: rowCount = 0
+Debug.Print "CalculatedHOurs Called"
+
+    ' Identify last row with data
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(-4162).row ' xlUp
+
+    ' Estimate how many rows to expect and pre-size the array
+    ReDim results(1 To lastRow - 1, 1 To 11) ' Skip header row
+
+    For i = 2 To lastRow ' Assuming headers in row 1
+        Dim B_ID As String
+        Dim QgendaName As String
+        Dim QgendaDate As Variant
+        Dim AssignmentName As String
+
+        ' Extract base columns from the source sheet
+        B_ID = ws.Cells(i, 1).Value
+        QgendaName = ws.Cells(i, 2).Value
+        QgendaDate = ws.Cells(i, 3).Value
+        AssignmentName = ws.Cells(i, 4).Value
+        HOLIDAY_YN = ws.Cells(i, 26).Value
+
+        ' Dummy logic for time calculations — replace with actual logic
+        Dim totalMinutes As Long: totalMinutes = 120 ' Example: actual minutes worked
+        Dim posMinutes As Long: posMinutes = 120
+        Dim earlyNeg As Long: earlyNeg = 60
+        Dim lateNeg As Long: lateNeg = 30
+        Dim postCallNeg As Long: postCallNeg = 20
+        Dim totalNeg As Long: totalNeg = earlyNeg + lateNeg + postCallNeg
+
+        rowCount = rowCount + 1
+Debug.Print "CalculatedHOurs Before results"
+        ' Store results in the array
+        results(rowCount, 1) = B_ID
+        results(rowCount, 2) = QgendaName
+        results(rowCount, 3) = QgendaDate
+        results(rowCount, 4) = AssignmentName
+        results(rowCount, 5) = totalMinutes
+        results(rowCount, 6) = posMinutes
+        results(rowCount, 7) = earlyNeg
+        results(rowCount, 8) = lateNeg
+        results(rowCount, 9) = postCallNeg
+        results(rowCount, 10) = totalNeg
+        results(rowCount, 11) = HOLIDAY_YN
+        Debug.Print "CalculatedHOurs After results Called"
+    Next i
+
+    ' Resize the result array to match actual rowCount (in case of empty rows)
+    If rowCount > 0 Then
+        ReDim Preserve results(1 To rowCount, 1 To 11)
+        CalculateHoursWorkedOnSheet = results
+    Else
+        CalculateHoursWorkedOnSheet = Array() ' return empty array
+    End If
+    Debug.Print "Ran calculations for " & AssignmentName
+    
+End Function
+
+
+Sub CalculateHoursWorkedOBCS(HowlongGapbeforeConsideredHome As Integer)
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim uniqueanesthesiologistsNdates, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim lastendtime, firststarttime As String
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the counted hours
+ mydb.Execute "CREATE TABLE HoursWorkedOBCS " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "HOURS_WORKED NUMBER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT HoursWorkedOBCS UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED));"
+    
+    'Select unique anesthesiologists, surgery date
+    'strSQL0 = "SELECT DISTINCT DateValue( [Anesthesia Minutes Data].ANES_START) AS ANES_START_DATE,  [Anesthesia Minutes Data].ANES_PROV_ID, [Anesthesia Minutes Data].ANES_PROVIDER FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_TYPE=""Anesthesiologist"";"
+     strSQL0 = "SELECT DISTINCT ANES_START_DATE,  ANES_PROV_ID FROM [OBALLCS];"
+      Set uniqueanesthesiologistsNdates = mydb.OpenRecordset(strSQL0)
+    With uniqueanesthesiologistsNdates
+       'Loop through each anesthesiologist and each surgery date
+        Do Until .EOF
+            'Select all the cases performed by the anesthesiologist on this date - 1 day (This captures cases which were started a day before and signed out)
+            'strSQL1 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE ((([Anesthesia Minutes Data].ANES_PROVIDER) =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & " ) And (([Anesthesia Minutes Data].SURGERY_DATE) = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!SURGERY_DATE) & "#)) ORDER BY [Anesthesia Minutes Data].ANES_START;"
+            'Select all the cases performed by the anesthesiologist on this date
+            'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And [Anesthesia Minutes Data].ANES_PROV_ID =" & uniqueanesthesiologistsNdates!ANES_PROV_ID & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    'strSQL2 = "SELECT [Anesthesia Minutes Data].ANES_START, [Anesthesia Minutes Data].ANES_END FROM [Anesthesia Minutes Data] WHERE [Anesthesia Minutes Data].ANES_PROVIDER =" & """" & uniqueanesthesiologistsNdates!ANES_PROVIDER & """" & "  And DateValue([Anesthesia Minutes Data].ANES_START) = #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# ORDER BY [Anesthesia Minutes Data].ANES_START;"
+    strSQL1 = "SELECT OBALLCS.ANES_START, OBALLCS.ANES_END, OBALLCS.ANES_START_DATE FROM OBALLCS WHERE OBALLCS.ANES_START_DATE between #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# and #" & DateValue(uniqueanesthesiologistsNdates!ANES_START_DATE) & "# AND OBALLCS.ANES_PROV_ID = " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " ORDER BY OBALLCS.ANES_START ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'Check for null values in start or stop times
+
+            If Not crosscheckrecords.EOF Then
+            firststarttime = crosscheckrecords!Anes_Start
+            lastendtime = crosscheckrecords!Anes_End
+            totalduration = (DateDiff("n", firststarttime, lastendtime))
+            With crosscheckrecords
+                .MoveNext
+                Do Until .EOF
+
+                    If crosscheckrecords!Anes_End > lastendtime Then
+                        If (crosscheckrecords!Anes_Start < lastendtime) Then
+                            totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            
+                        Else
+                            If (DateDiff("n", lastendtime, crosscheckrecords!Anes_Start) > myacceptableGap) Then
+                                totalduration = totalduration + (DateDiff("n", crosscheckrecords!Anes_Start, crosscheckrecords!Anes_End))
+                            Else
+                                totalduration = totalduration + (DateDiff("n", lastendtime, crosscheckrecords!Anes_End))
+                            End If
+                        End If
+                        lastendtime = crosscheckrecords!Anes_End
+                    End If
+                    .MoveNext
+                    
+                Loop
+            End With
+           End If
+           'If starttime between 12 am and 6:45 am - add the total duration to previous day totalduration and update the previous day end time to this end time
+           If ((0 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) <= 5) Or ((6 <= Hour(TimeValue(firststarttime)) And Hour(TimeValue(firststarttime)) < 7) And (0 <= Minute(TimeValue(firststarttime)) And Minute(TimeValue(firststarttime)) <= 45))) Then
+            
+                
+                'starttime between midnight and 6:50
+                'open the record for this Anes_provider from the day before
+                'Select HOURS_WORKED, ANES_DAY_END from HoursWorkedOBCS where ANES_PROVIDER= "Vivek, Kumar " AND ANES_START_DATE = DateAdd("d", -1, [EnterDate]) ;
+                strSQL2 = "Select HOURS_WORKED, ANES_DAY_END from HoursWorkedOBCS where ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;"
+                Set previousdayrecords = mydb.OpenRecordset(strSQL2)
+                
+                'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
+                If Not previousdayrecords.EOF Then
+                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                        'difference more than acceptablegap
+                        totalduration = totalduration + previousdayrecords!HOURS_WORKED
+                    Else
+                        'difference less than acceptable gap
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                    End If
+                    'update the previous day record for this anes_provider
+                    mydb.Execute ("UPDATE HoursWorkedOBCS SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
+                    lastendtime = ""
+                    firststarttime = ""
+                    totalduration = 0
+                Else
+                    'previousdayrecords.EOF
+                    'Need to insert this data as the previous day data
+                    If Not (lastendtime = "" Or firststarttime = "") Then
+                        mydb.Execute ("INSERT INTO HoursWorkedOBCS (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+
+                    
+                End If
+                
+           Else
+                'starttime not between midnight and 6 am.
+                If Not (lastendtime = "" Or firststarttime = "") Then
+                    mydb.Execute ("INSERT INTO HoursWorkedOBCS (ANES_PROV_ID, ANES_START_DATE, HOURS_WORKED, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & ", #" & uniqueanesthesiologistsNdates!ANES_START_DATE & "#," & """" & totalduration & """" & ", #" & firststarttime & "#, #" & lastendtime & "# )")
+                    lastendtime = ""
+                    firststarttime = ""
+                End If
+                    totalduration = 0
+            End If
+        .MoveNext
+        Loop
+        
+    End With
+     
+        
+   crosscheckrecords.Close
+   uniqueanesthesiologistsNdates.Close
+   previousdayrecords.Close
+   
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set uniqueanesthesiologistsNdates = Nothing
+   Set previousdayrecords = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+Sub AssignOBEarlyLate()
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim OBdataset, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim firstpersonID As String
+Dim firstpersonanesstartdate, firstpersonendtime, firstpersonstarttime As Date
+
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the OB assignments
+ mydb.Execute "CREATE TABLE OBEarlyLate " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "ADJUSTEDASSIGNMENT CHAR, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT OBEarlyLate UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE));"
+    
+    
+       ' Select distinct dates in the list
+            strSQL0 = "SELECT DISTINCT Master_HoursWorked_AllAssignments.Date " _
+            & "FROM Master_HoursWorked_AllAssignments " _
+            & "WHERE (((Master_HoursWorked_AllAssignments.AssignmentCode) Like " & """" & "*OBW*" & """" & "));"
+    
+    Set OBdataset = mydb.OpenRecordset(strSQL0)
+    With OBdataset
+       'Loop through each  date
+        Do Until .EOF
+            'Select OBW on each date
+             strSQL1 = "SELECT Master_HoursWorked_AllAssignments.ANES_PROV_ID, Master_HoursWorked_AllAssignments.ANES_DAY_START, Master_HoursWorked_AllAssignments.ANES_DAY_END, Master_HoursWorked_AllAssignments.AssignmentCode, Master_HoursWorked_AllAssignments.Name, Master_HoursWorked_AllAssignments.Date" _
+            & " FROM Master_HoursWorked_AllAssignments" _
+            & " WHERE Master_HoursWorked_AllAssignments.AssignmentCode Like " & """" & "*OBW*" & """" & " AND Master_HoursWorked_AllAssignments.Date =#" & OBdataset!Date & "# ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'For each date, find the two people assigned to OBW and then check their end times. The one with later end time becomed OBWLate (assumption - no more than two people on OBW - which is true)
+                
+            If Not crosscheckrecords.EOF Then
+                'Grab the current record
+                If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                
+                    firstpersonID = crosscheckrecords!Anes_Prov_ID
+                    firstpersonanesstartdate = crosscheckrecords!Date
+                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonstarttime = crosscheckrecords!Anes_Day_Start
+                End If
+                 'Go to the next record
+                crosscheckrecords.MoveNext
+                'Make sure there is a next record
+                If Not crosscheckrecords.EOF Then
+                    
+                   
+                    
+                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    'Second person stayed later
+                        If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                        
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
+                        End If
+                    Else
+                    'First person stayed later
+                        
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & firstpersonID & """" & ", #" & firstpersonanesstartdate & "#," & """" & " OBWLate " & """" & ", #" & firstpersonstarttime & "#, #" & firstpersonendtime & "# )")
+                        
+                    End If
+                    firstpersonID = ""
+                    firstpersonanesstartdate = vbNull
+                    firstpersonendtime = vbNull
+                    firstpersonstarttime = vbNull
+                End If
+            End If
+
+
+        .MoveNext
+                    
+        Loop
+    End With
+        
+        
+   crosscheckrecords.Close
+   OBdataset.Close
+    
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set OBdataset = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+Sub AssignOBminutes()
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim OBdataset, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim firstpersonID As String
+Dim firstpersonanesstartdate, firstpersonendtime, firstpersonstarttime As Date
+Dim OBMinute As Integer
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the OB assignments and minutes
+ mydb.Execute "CREATE TABLE OBEarlyLate " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "ADJUSTEDASSIGNMENT CHAR, " _
+            & "OBMINUTES INTEGER, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT OBEarlyLate UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE));"
+    
+    
+       ' Select distinct dates in the list
+            strSQL0 = "SELECT DISTINCT Master_HoursWorked_AllAssignments.Date " _
+            & "FROM Master_HoursWorked_AllAssignments " _
+            & "WHERE (((Master_HoursWorked_AllAssignments.AssignmentCode) Like " & """" & "*OBW*" & """" & "));"
+    
+    Set OBdataset = mydb.OpenRecordset(strSQL0)
+    With OBdataset
+       'Loop through each  date
+        Do Until .EOF
+            'Select OBW on each date
+             strSQL1 = "SELECT Master_HoursWorked_AllAssignments.ANES_PROV_ID, Master_HoursWorked_AllAssignments.ANES_DAY_START, Master_HoursWorked_AllAssignments.ANES_DAY_END, Master_HoursWorked_AllAssignments.AssignmentCode, Master_HoursWorked_AllAssignments.Name, Master_HoursWorked_AllAssignments.Date" _
+            & " FROM Master_HoursWorked_AllAssignments" _
+            & " WHERE Master_HoursWorked_AllAssignments.AssignmentCode Like " & """" & "*OBW*" & """" & " AND Master_HoursWorked_AllAssignments.Date =#" & OBdataset!Date & "# ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'For each date, find the  people assigned to OBW and then check their end times. The one with later end time becomed OBWLate (assumption - no more than two people on OBW - which is true)
+                
+            If Not crosscheckrecords.EOF Then
+                'Grab the current record
+                If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                
+                    firstpersonID = crosscheckrecords!Anes_Prov_ID
+                    firstpersonanesstartdate = crosscheckrecords!Date
+                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonstarttime = crosscheckrecords!Anes_Day_Start
+                End If
+                 'Go to the next record
+                crosscheckrecords.MoveNext
+                'Make sure there is a next record
+                If Not crosscheckrecords.EOF Then
+                    
+                   
+                    
+                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    'Second person stayed later
+                        If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                        
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
+                        End If
+                    Else
+                    'First person stayed later
+                        
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & firstpersonID & """" & ", #" & firstpersonanesstartdate & "#," & """" & " OBWLate " & """" & ", #" & firstpersonstarttime & "#, #" & firstpersonendtime & "# )")
+                        
+                    End If
+                    firstpersonID = ""
+                    firstpersonanesstartdate = vbNull
+                    firstpersonendtime = vbNull
+                    firstpersonstarttime = vbNull
+                End If
+            End If
+                        
+        .MoveNext
+                    
+        Loop
+    End With
+        
+        
+   crosscheckrecords.Close
+   OBdataset.Close
+    
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set OBdataset = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
+
+
+Sub DEBUGAssignOBEarlyLate()
+
+Dim mydb As DAO.Database
+
+Dim strSQL0, strSQL1, strSQL2 As String
+Dim OBdataset, crosscheckrecords, previousdayrecords As DAO.Recordset
+Dim firstpersonID As String
+Dim firstpersonanesstartdate, firstpersonendtime, firstpersonstarttime As Date
+Dim overlapdetected As Boolean
+Dim totalduration As Integer
+Dim myacceptableGap As Integer
+myacceptableGap = HowlongGapbeforeConsideredHome
+
+On Error GoTo ErrorHandler
+ 
+ 
+   Set mydb = CurrentDb()
+ 'Create a new table to save the OB assignments
+ 'mydb.Execute "CREATE TABLE OBEarlyLate " _
+            & "(ANES_PROV_ID CHAR, " _
+            & "ANES_START_DATE DATETIME, " _
+            & "ADJUSTEDASSIGNMENT CHAR, " _
+            & "ANES_DAY_START DATETIME, " _
+            & "ANES_DAY_END DATETIME, " _
+            & "CONSTRAINT OBEarlyLate UNIQUE " _
+            & "(ANES_PROV_ID, ANES_START_DATE));"
+    
+    
+       ' Select distinct dates in the list
+            strSQL0 = "SELECT DISTINCT Master_HoursWorked_AllAssignments.Date " _
+            & "FROM Master_HoursWorked_AllAssignments " _
+            & "WHERE (((Master_HoursWorked_AllAssignments.AssignmentCode) Like " & """" & "*OBW*" & """" & "));"
+    
+    Set OBdataset = mydb.OpenRecordset(strSQL0)
+    With OBdataset
+       'Loop through each  date
+        Do Until .EOF
+            'Select OBW on each date
+             strSQL1 = "SELECT Master_HoursWorked_AllAssignments.ANES_PROV_ID, Master_HoursWorked_AllAssignments.ANES_DAY_START, Master_HoursWorked_AllAssignments.ANES_DAY_END, Master_HoursWorked_AllAssignments.AssignmentCode, Master_HoursWorked_AllAssignments.Name, Master_HoursWorked_AllAssignments.Date" _
+            & " FROM Master_HoursWorked_AllAssignments" _
+            & " WHERE Master_HoursWorked_AllAssignments.AssignmentCode Like " & """" & "*OBW*" & """" & " AND Master_HoursWorked_AllAssignments.Date =#" & OBdataset!Date & "# ;"
+            Set crosscheckrecords = mydb.OpenRecordset(strSQL1)
+            'For each date, find the two people assigned to OBW and then check their end times. The one with later end time becomed OBWLate (assumption - no more than two people on OBW - which is true)
+                
+            If Not crosscheckrecords.EOF Then
+                'Grab the current record
+                If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                
+                    firstpersonID = crosscheckrecords!Anes_Prov_ID
+                    firstpersonanesstartdate = crosscheckrecords!Date
+                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonstarttime = crosscheckrecords!Anes_Day_Start
+                End If
+                 'Go to the next record
+                crosscheckrecords.MoveNext
+                'Make sure there is a next record
+                If Not crosscheckrecords.EOF Then
+                    
+                   
+                    
+                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    'Second person stayed later
+                        If Not (crosscheckrecords!Anes_Day_Start = "") Then
+                        
+                       MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END & "# AND FirstPersontime  = # " & firstpersonendtime & " # Second person stayed late")
+                     
+                         'MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END) ' & "# AND FirstPersontime  = # " & firstpersonendtime & " # Second person stayed late")
+                            'mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!ANES_PROV_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
+                        End If
+                    Else
+                    'First person stayed later
+                        
+                            'mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & firstpersonID & """" & ", #" & firstpersonanesstartdate & "#," & """" & " OBWLate " & """" & ", #" & firstpersonstarttime & "#, #" & firstpersonendtime & "# )")
+                           MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END & "# AND FirstPersontime = # " & firstpersonendtime & " # First person stayed late")
+
+                    End If
+                    firstpersonID = ""
+                    firstpersonanesstartdate = vbNull
+                    firstpersonendtime = vbNull
+                    firstpersonstarttime = vbNull
+                End If
+            End If
+
+        .MoveNext
+                    
+        Loop
+    End With
+        
+        
+   crosscheckrecords.Close
+   OBdataset.Close
+    
+    mydb.Close
+    
+    
+   Set crosscheckrecords = Nothing
+   Set OBdataset = Nothing
+   Set mydb = Nothing
+   MsgBox ("All Done")
+   Exit Sub
+ 
+ErrorHandler:
+   MsgBox "Error #: " & Err.Number & vbCrLf & vbCrLf & Err.Description
+End Sub
+
