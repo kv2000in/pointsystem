@@ -588,12 +588,12 @@ On Error GoTo ErrorHandler
                 
                 'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
                 If Not previousdayrecords.EOF Then
-                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                    If (DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime) > myacceptableGap) Then
                         'difference more than acceptablegap
                         totalduration = totalduration + previousdayrecords!HOURS_WORKED
                     Else
                         'difference less than acceptable gap
-                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime)
                     End If
                     'update the previous day record for this anes_provider
                     mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
@@ -732,12 +732,12 @@ On Error GoTo ErrorHandler
                 
                 'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
                 If Not previousdayrecords.EOF Then
-                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                    If (DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime) > myacceptableGap) Then
                         'difference more than acceptablegap
                         totalduration = totalduration + previousdayrecords!HOURS_WORKED
                     Else
                         'difference less than acceptable gap
-                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime)
                     End If
                     'update the previous day record for this anes_provider
                     mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
@@ -959,12 +959,12 @@ On Error GoTo ErrorHandler
                 
                 'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
                 If Not previousdayrecords.EOF Then
-                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                    If (DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime) > myacceptableGap) Then
                         'difference more than acceptablegap
                         totalduration = totalduration + previousdayrecords!HOURS_WORKED
                     Else
                         'difference less than acceptable gap
-                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime)
                     End If
                     'update the previous day record for this anes_provider
                     mydb.Execute ("UPDATE HoursWorked SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
@@ -1026,8 +1026,13 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
     Dim strSQL As String
     Dim Anes_Prov_ID As String
     Dim QgendaDate As Date
+    Dim UnderProcessDate As Date
     Dim Anes_Start As Date
     Dim Anes_End As Date
+    Dim Anes_Day_Start As Date ' Starttime for First case of the shift
+    Dim Anes_Day_End As Date ' Endtime for Last case of the shift
+    Dim ShiftAnalysisStart As Date
+    Dim ShiftAnalysisEnd As Date
     Dim ShiftStart As Date
     Dim ShiftEnd As Date
     Dim TotalMinutesWorked As Integer
@@ -1035,6 +1040,8 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
     Dim LateStartNegativeMinutes As Integer
     Dim EarlyReliefNegativeMinutes As Integer
     Dim PostCallNegativeMinutes As Integer
+    Dim DateChanged As Boolean
+    
 
     Set mydb = CurrentDb()
 
@@ -1051,13 +1058,20 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
         
         
         
-
+            'Anesthesia_Minutes_Data_with_Qgenda_Assignments_w_x_ShiftTimes
+            strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_Qgenda_Assignments_w_x_ShiftTimes " & _
+                     "WHERE S.AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
+                     "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek & " " & _
+                    "ORDER BY ANES_START;"
         
-        strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
-         "WHERE S_AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
-         "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek
+                    
+            'strSQL = "SELECT * FROM Anesthesia_Minutes_Data_with_QTX " & _
+                     "WHERE S_AssignmentName = '" & rsShiftTimes!AssignmentName & "' " & _
+                     "AND QgendaWeekday = " & rsShiftTimes!DayofTheWeek & " " & _
+                     "ORDER BY ANES_START;"
+            
         
-        Set rsAnesData = mydb.OpenRecordset(strSQL)
+            Set rsAnesData = mydb.OpenRecordset(strSQL)
 
 
 
@@ -1069,42 +1083,120 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
 
 
        
-        ' Process each record in rsAnesData
-        If Not rsAnesData.EOF Then
+            ' Process each record in rsAnesData
+            If Not rsAnesData.EOF Then
             
-            Do Until rsAnesData.EOF
+             Do Until rsAnesData.EOF
                 Anes_Prov_ID = Nz(rsAnesData!Anes_Prov_ID, 0)
                 QgendaDate = Nz(rsAnesData!QgendaDate, Date)
                 Anes_Start = Nz(rsAnesData!Anes_Start, #1/1/1900#)
                 Anes_End = Nz(rsAnesData!Anes_End, #1/1/1900#)
                 
-                 ' Determine shift times
-            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStartTime)
-            If rsShiftTimes!AnalysisStopTime <= rsShiftTimes!AnalysisStartTime Then
-                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!AnalysisStopTime)
-            Else
-                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStopTime)
-            End If
-
-
-
-' Convert ShiftStart and ShiftEnd to proper SQL date format
-ShiftStart = Format(ShiftStart, "mm/dd/yyyy hh:nn:ss AMPM")
-ShiftEnd = Format(ShiftEnd, "mm/dd/yyyy hh:nn:ss AMPM")
-
-Debug.Print "Analysis Start " & ShiftStart
-Debug.Print "Analysis Stop " & ShiftEnd
-
-
-              If (Anes_Start >= ShiftStart And Anes_Start <= ShiftEnd) Or _
-   (Anes_End >= ShiftStart And Anes_End <= ShiftEnd) Then
-                
-                            ' Process each record
-                            Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
-                            'ADD Aggregation by QgendaDate here
-                            
+          
+                ' Determine shift Analysis times
+                ShiftAnalysisStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStartTime)
+                If rsShiftTimes!AnalysisStopTime <= rsShiftTimes!AnalysisStartTime Then
+                    ShiftAnalysisEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!AnalysisStopTime)
                 Else
-                Debug.Print "Skipped"
+                    ShiftAnalysisEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!AnalysisStopTime)
+                End If
+
+
+
+                ' Convert ShiftAnalysisStart and ShiftAnalysisEnd to proper SQL date format
+                ShiftAnalysisStart = Format(ShiftAnalysisStart, "mm/dd/yyyy hh:nn:ss AMPM")
+                ShiftAnalysisEnd = Format(ShiftAnalysisEnd, "mm/dd/yyyy hh:nn:ss AMPM")
+
+
+
+
+
+                If (Anes_Start >= ShiftAnalysisStart And Anes_Start <= ShiftAnalysisEnd) Or _
+                    (Anes_End >= ShiftAnalysisStart And Anes_End <= ShiftAnalysisEnd) Then
+                    If UnderProcessDate <> QgendaDate Then
+
+                        Debug.Print "Anes_Day_Start = " & Anes_Day_Start
+                        Debug.Print "Anes_Day_End = " & Anes_Day_End
+                        
+                        UnderProcessDate = QgendaDate
+                        Debug.Print "I am date changed " & UnderProcessDate
+                        Debug.Print "Anes_Day_Start = " & Anes_Day_Start
+                        Debug.Print "Anes_Day_End = " & Anes_Day_End
+                        'Date changed - start sorting and calculating minutes, set the flag
+                        DateChanged = True
+                        'Reset the minutes
+                        TotalMinutesWorked = 0
+                        PositiveMinutes = 0
+                        EarlyReliefNegativeMinutes = 0
+                        LateStartNegativeMinutes = 0
+                        PostCallNegativeMinutes = 0
+                        Anes_Day_Start = rsAnesData!Anes_Start
+                        Anes_Day_End = rsAnesData!Anes_End
+                        'Check if it is an inhouse shift.
+                        'If yes assign positive minutes = Shift stop time-Shift Start time
+                        'Set earlyrelief and latestart negative minutes as zero.
+                        'Check if its an inhouse shift with POstcallday Y or N.
+                        'Check if the next day is weekday and not a holiday (WeekDayPostCall Y orN).
+                        'Assign postCallNegative minutes if Y
+                        If (rsShiftTimes!Inhouse) Then
+                            'Check shift start time (not the analysis start time)
+                            ShiftStart = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStartTime)
+                            If rsShiftTimes!ShiftStopTime <= rsShiftTimes!ShiftStartTime Then
+                                ShiftEnd = DateValue(QgendaDate + 1) + TimeValue(rsShiftTimes!ShiftStopTime)
+                            Else
+                                ShiftEnd = DateValue(QgendaDate) + TimeValue(rsShiftTimes!ShiftStopTime)
+                            End If
+                            ' Convert ShiftAnalysisStart and ShiftAnalysisEnd to proper SQL date format
+                            ShiftStart = Format(ShiftStart, "mm/dd/yyyy hh:nn:ss AMPM")
+                            ShiftEnd = Format(ShiftEnd, "mm/dd/yyyy hh:nn:ss AMPM")
+                            PositiveMinutes = DateDiff("n", ShiftStart, ShiftEnd) 'inhouse shift positive minutes is all the shift time spent inhouse
+                            EarlyReliefNegativeMinutes = 0
+                            LateStartNegativeMinutes = 0
+                            
+                            If (rsAnesData!WeekdayPOstCall = "Y") Then ' Nextday is weekday and not a holiday
+                                If (rsShiftTimes!POstCall) Then ' This is a postcall generating inhouse shift (pm shifts)
+                                    PostCallNegativeMinutes = 600
+                            
+                                End If
+                            
+                            
+                            Else: PostCallNegativeMinutes = 0 'Not a postcall generating inhouse shift (am shifts)or Nextday is holiday
+                            End If
+                        
+                        Else
+                        
+                            'Not an inhouse shift
+                            Debug.Print "Beeper Shift"
+                            
+                        End If
+                            
+                        Debug.Print "Date Changed First record" & PositiveMinutes & " " & PostCallNegativeMinutes
+                        Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+ 
+                    ' Process each record grouped by Date
+                    Else:
+                        'UnderProcessDate=QgendaDate
+                        'Assumption is for each Qgendadate with a unique Assignement - 1 anes provider did all the cases. Hence not checking for Anes_Prov_ID
+
+                    'Debug.Print " I am UnderProcessDate=QgendaDate"
+                    'Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                    'Debug.Print " I am UnderProcessDate=QgendaDate - records where Date doesn't change"
+                    Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                    If (rsAnesData!Anes_Start < Anes_Day_Start) Then
+                        Anes_Day_Start = rsAnesData!Anes_Start
+                    End If
+                    If (rsAnesData!Anes_End > Anes_Day_End) Then
+                        Anes_Day_End = rsAnesData!Anes_End
+                    End If
+                 
+                    
+                    
+                    End If
+                        
+
+                 
+                Else
+                    Debug.Print "Skipping " & rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
                 
                 End If
                 ' Move to next record in rsAnesData
@@ -1653,12 +1745,12 @@ On Error GoTo ErrorHandler
                 
                 'check the difference between previous date endtime and this date start time - if more than the passed param - do simmple addition else addd the difference between this end time and previous day end time to total hours
                 If Not previousdayrecords.EOF Then
-                    If (DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime) > myacceptableGap) Then
+                    If (DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime) > myacceptableGap) Then
                         'difference more than acceptablegap
                         totalduration = totalduration + previousdayrecords!HOURS_WORKED
                     Else
                         'difference less than acceptable gap
-                        totalduration = totalduration + DateDiff("n", previousdayrecords!ANES_DAY_END, lastendtime)
+                        totalduration = totalduration + DateDiff("n", previousdayrecords!Anes_Day_End, lastendtime)
                     End If
                     'update the previous day record for this anes_provider
                     mydb.Execute ("UPDATE HoursWorkedOBCS SET HOURS_WORKED = " & """" & totalduration & """" & ", ANES_DAY_END =#" & lastendtime & "# WHERE ANES_PROV_ID= " & """" & uniqueanesthesiologistsNdates!Anes_Prov_ID & """" & " AND ANES_START_DATE = #" & DateAdd("d", -1, uniqueanesthesiologistsNdates!ANES_START_DATE) & "#;")
@@ -1757,7 +1849,7 @@ On Error GoTo ErrorHandler
                 
                     firstpersonID = crosscheckrecords!Anes_Prov_ID
                     firstpersonanesstartdate = crosscheckrecords!Date
-                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonendtime = crosscheckrecords!Anes_Day_End
                     firstpersonstarttime = crosscheckrecords!Anes_Day_Start
                 End If
                  'Go to the next record
@@ -1767,11 +1859,11 @@ On Error GoTo ErrorHandler
                     
                    
                     
-                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    If crosscheckrecords!Anes_Day_End > firstpersonendtime Then
                     'Second person stayed later
                         If Not (crosscheckrecords!Anes_Day_Start = "") Then
                         
-                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!Anes_Day_End & "# )")
                         End If
                     Else
                     'First person stayed later
@@ -1857,7 +1949,7 @@ On Error GoTo ErrorHandler
                 
                     firstpersonID = crosscheckrecords!Anes_Prov_ID
                     firstpersonanesstartdate = crosscheckrecords!Date
-                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonendtime = crosscheckrecords!Anes_Day_End
                     firstpersonstarttime = crosscheckrecords!Anes_Day_Start
                 End If
                  'Go to the next record
@@ -1867,11 +1959,11 @@ On Error GoTo ErrorHandler
                     
                    
                     
-                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    If crosscheckrecords!Anes_Day_End > firstpersonendtime Then
                     'Second person stayed later
                         If Not (crosscheckrecords!Anes_Day_Start = "") Then
                         
-                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
+                            mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!Anes_Prov_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!Anes_Day_End & "# )")
                         End If
                     Else
                     'First person stayed later
@@ -1960,7 +2052,7 @@ On Error GoTo ErrorHandler
                 
                     firstpersonID = crosscheckrecords!Anes_Prov_ID
                     firstpersonanesstartdate = crosscheckrecords!Date
-                    firstpersonendtime = crosscheckrecords!ANES_DAY_END
+                    firstpersonendtime = crosscheckrecords!Anes_Day_End
                     firstpersonstarttime = crosscheckrecords!Anes_Day_Start
                 End If
                  'Go to the next record
@@ -1970,11 +2062,11 @@ On Error GoTo ErrorHandler
                     
                    
                     
-                    If crosscheckrecords!ANES_DAY_END > firstpersonendtime Then
+                    If crosscheckrecords!Anes_Day_End > firstpersonendtime Then
                     'Second person stayed later
                         If Not (crosscheckrecords!Anes_Day_Start = "") Then
                         
-                       MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END & "# AND FirstPersontime  = # " & firstpersonendtime & " # Second person stayed late")
+                       MsgBox ("Secondpersontime = #" & crosscheckrecords!Anes_Day_End & "# AND FirstPersontime  = # " & firstpersonendtime & " # Second person stayed late")
                      
                          'MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END) ' & "# AND FirstPersontime  = # " & firstpersonendtime & " # Second person stayed late")
                             'mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & crosscheckrecords!ANES_PROV_ID & """" & ", #" & crosscheckrecords!Date & "#," & """" & " OBWLate " & """" & ", #" & crosscheckrecords!Anes_Day_Start & "#, #" & crosscheckrecords!ANES_DAY_END & "# )")
@@ -1983,7 +2075,7 @@ On Error GoTo ErrorHandler
                     'First person stayed later
                         
                             'mydb.Execute ("INSERT INTO OBEarlyLate (ANES_PROV_ID, ANES_START_DATE, ADJUSTEDASSIGNMENT, ANES_DAY_START, ANES_DAY_END) VALUES (" & """" & firstpersonID & """" & ", #" & firstpersonanesstartdate & "#," & """" & " OBWLate " & """" & ", #" & firstpersonstarttime & "#, #" & firstpersonendtime & "# )")
-                           MsgBox ("Secondpersontime = #" & crosscheckrecords!ANES_DAY_END & "# AND FirstPersontime = # " & firstpersonendtime & " # First person stayed late")
+                           MsgBox ("Secondpersontime = #" & crosscheckrecords!Anes_Day_End & "# AND FirstPersontime = # " & firstpersonendtime & " # First person stayed late")
 
                     End If
                     firstpersonID = ""
