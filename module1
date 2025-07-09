@@ -1041,8 +1041,10 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
     Dim EarlyReliefNegativeMinutes As Integer
     Dim PostCallNegativeMinutes As Integer
     Dim DateChanged As Boolean
-    
-
+    Dim SoloMinutes As Integer ' Figuring out if there was a resident/CRNA or not - -need Concurrency column on raw data. This just looks at How many simultaneous cases (presence of absence of overlapping times)
+    Dim OverlappingMinutes As Integer
+    Dim ContinuousStretchStart As Date
+    Dim ContinuousStretchEnd As Date
     Set mydb = CurrentDb()
 
 
@@ -1110,19 +1112,20 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
 
 
 
-
+                'Check if the Current Record is within the time bounds of analysis per the Shift Definitions Table
                 If (Anes_Start >= ShiftAnalysisStart And Anes_Start <= ShiftAnalysisEnd) Or _
                     (Anes_End >= ShiftAnalysisStart And Anes_End <= ShiftAnalysisEnd) Then
+                    'Check if we have moved on to a new Qgenda Date
                     If UnderProcessDate <> QgendaDate Then
 
+                        Debug.Print "date Has changed " & UnderProcessDate
                         Debug.Print "Anes_Day_Start = " & Anes_Day_Start
                         Debug.Print "Anes_Day_End = " & Anes_Day_End
-                        
-                        UnderProcessDate = QgendaDate
-                        Debug.Print "I am date changed " & UnderProcessDate
-                        Debug.Print "Anes_Day_Start = " & Anes_Day_Start
-                        Debug.Print "Anes_Day_End = " & Anes_Day_End
+                        Debug.Print "Total Minutes : " & TotalMinutesWorked
+                        Debug.Print "Positive Minutes: " & PositiveMinutes
+                        Debug.Print "POst Call Negative Minutes " & PostCallNegativeMinutes
                         'Date changed - start sorting and calculating minutes, set the flag
+                        UnderProcessDate = QgendaDate
                         DateChanged = True
                         'Reset the minutes
                         TotalMinutesWorked = 0
@@ -1157,20 +1160,20 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
                                 If (rsShiftTimes!POstCall) Then ' This is a postcall generating inhouse shift (pm shifts)
                                     PostCallNegativeMinutes = 600
                             
-                                End If
+                                End If ' End of (rsShiftTimes!POstCall)
                             
                             
                             Else: PostCallNegativeMinutes = 0 'Not a postcall generating inhouse shift (am shifts)or Nextday is holiday
-                            End If
+                            End If 'End of (rsAnesData!WeekdayPOstCall = "Y")
                         
-                        Else
+                        ElseIf (rsShiftTimes!Beeper) Then
                         
-                            'Not an inhouse shift
-                            Debug.Print "Beeper Shift"
+                            'Not an inhouse shift Date has changed. Aggregate the minutes for the Beeper shift
+                            Debug.Print "Beeper Shift Date Changed"
                             
-                        End If
+                        End If ' End of (rsShiftTimes!Inhouse)/(rsShiftTimes!Beeper)
                             
-                        Debug.Print "Date Changed First record" & PositiveMinutes & " " & PostCallNegativeMinutes
+                        Debug.Print "Date Changed First record"
                         Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
  
                     ' Process each record grouped by Date
@@ -1178,27 +1181,51 @@ Sub CalculateHoursWorkedPosNegMinutes(HowlongGapbeforeConsideredHome As Integer)
                         'UnderProcessDate=QgendaDate
                         'Assumption is for each Qgendadate with a unique Assignement - 1 anes provider did all the cases. Hence not checking for Anes_Prov_ID
 
-                    'Debug.Print " I am UnderProcessDate=QgendaDate"
-                    'Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
-                    'Debug.Print " I am UnderProcessDate=QgendaDate - records where Date doesn't change"
-                    Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
-                    If (rsAnesData!Anes_Start < Anes_Day_Start) Then
-                        Anes_Day_Start = rsAnesData!Anes_Start
-                    End If
-                    If (rsAnesData!Anes_End > Anes_Day_End) Then
-                        Anes_Day_End = rsAnesData!Anes_End
-                    End If
+                        'Debug.Print " I am UnderProcessDate=QgendaDate"
+                        'Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                        'Debug.Print " I am UnderProcessDate=QgendaDate - records where Date doesn't change"
+                        Debug.Print rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                        If (rsShiftTimes!Inhouse) Then
+                            If (rsAnesData!Anes_Start < Anes_Day_Start) Then
+                                Anes_Day_Start = rsAnesData!Anes_Start
+                                'Start counting minutes
+                       
+                        
+                                If (Anes_Day_Start < ShiftStart) Then
+                                    Anes_Day_Start = ShiftStart
+                                End If
+                            End If ' End of rsAnesData!Anes_Start < Anes_Day_Start
+                            
+                            ContinuousStretchStart = Anes_Day_Start
+                            
+                            If (rsAnesData!Anes_End > Anes_Day_End) Then
+                                Anes_Day_End = rsAnesData!Anes_End
+                                If (Anes_Day_End > ShiftEnd) Then
+                                    Anes_Day_End = ShiftEnd
+                                End If
+                            End If ' End of rsAnesData!Anes_End > Anes_Day_End
+                            ContinuousStretchEnd = Anes_Day_End
+                            
+                            TotalMinutesWorked = DateDiff("n", ContinuousStretchStart, ContinuousStretchEnd)
+                        
+                        ElseIf (rsShiftTimes!Beeper) Then
+                            'Handle Beeper Calls here.
+                    
+                        End If 'End of (rsShiftTimes!Inhouse)/(rsShiftTimes!Beeper)
+                    
+                    End If 'End of UnderProcess=QgendaDate
                  
                     
                     
-                    End If
+                    
                         
 
                  
                 Else
-                    Debug.Print "Skipping " & rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
+                    Debug.Print "Skipping, Times out of bounds per Shift Analysis Times" & rsShiftTimes!AssignmentName, rsShiftTimes!DayName, rsAnesData!Anes_Prov_ID, rsAnesData!QgendaDate, rsAnesData!Anes_Start, rsAnesData!Anes_End
                 
-                End If
+                End If ' End of (Anes_Start >= ShiftAnalysisStart And Anes_Start <= ShiftAnalysisEnd)
+                
                 ' Move to next record in rsAnesData
                 rsAnesData.MoveNext
             Loop
